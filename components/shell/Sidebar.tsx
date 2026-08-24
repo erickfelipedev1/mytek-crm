@@ -38,29 +38,48 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
         collapsed ? "w-16" : "w-60",
       )}
     >
-      <div className={cn("flex items-center border-b px-4 h-14", collapsed ? "justify-center" : "justify-start")}>
-        {brand.logoUrl && !collapsed ? (
+      <div
+        className={cn(
+          "flex h-14 items-center gap-2 border-b px-4",
+          collapsed ? "justify-center" : "justify-start",
+        )}
+      >
+        {/* Logo E nome, não logo OU nome. A versão anterior trocava um pelo
+            outro: quem configurava um logo perdia o nome do produto na
+            sidebar — e um símbolo sozinho não diz QUAL sistema é este, que é
+            justamente o trabalho do cabeçalho. Recolhida, só o símbolo fica
+            (não cabe mais), e o nome sobrevive em `sr-only` para leitor de
+            tela. */}
+        {brand.logoUrl ? (
           // <img> em vez de next/image de propósito: a URL vem do .env de quem hospeda,
           // e next/image exige allowlist de domínios fechada em build — a imagem
           // pré-buildada rejeitaria o domínio do self-hoster. Altura fixa e largura
           // livre porque a arte enviada tem proporção desconhecida; forçar as duas
           // distorceria o logo de quem configurou.
+          //
+          // alt="" (decorativo) porque o nome vem logo ao lado como TEXTO: com
+          // alt={brand.name} o leitor de tela anunciaria a marca duas vezes.
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={brand.logoUrl}
-            alt={brand.name}
-            className="h-7 w-auto max-w-[10rem] object-contain"
+            alt=""
+            className="h-7 w-auto max-w-[6rem] shrink-0 object-contain"
           />
         ) : (
-          <span className={cn("font-semibold tracking-tight", collapsed && "sr-only")}>
-            {brand.name}
-          </span>
+          collapsed && (
+            <span aria-hidden className="text-lg font-bold text-primary">
+              {brand.initial}
+            </span>
+          )
         )}
-        {collapsed && (
-          <span aria-hidden className="text-lg font-bold text-primary">
-            {brand.initial}
-          </span>
-        )}
+        <span
+          className={cn(
+            "brand-wordmark truncate text-[15px] font-semibold tracking-tight",
+            collapsed && "sr-only",
+          )}
+        >
+          {brand.name}
+        </span>
       </div>
       <nav className="flex-1 space-y-3 overflow-y-auto p-2" aria-label="Navegação principal">
         {grupos.map(({ group, items }) => {

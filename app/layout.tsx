@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Atkinson_Hyperlegible, IBM_Plex_Mono } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { branding } from "@/lib/branding";
 import { ThemeProvider } from "@/lib/theme";
@@ -7,16 +7,21 @@ import { Providers } from "./providers";
 import { PublicEnvScript } from "./public-env-script";
 import "./globals.css";
 
-const atkinson = Atkinson_Hyperlegible({
+// Geist — a mesma família do site da marca (mytek).
+//
+// A variável é `--font-sans`, e NÃO a antiga `--font-atkinson`: o showcase em
+// `app/design/` carrega a Atkinson de verdade na variável de mesmo nome. Manter
+// o nome aqui deixaria a mesma variável apontando para duas fontes diferentes
+// conforme a rota — o tipo de armadilha que só aparece meses depois, quando
+// alguém mexe no showcase e a fonte do app inteiro muda junto.
+const geistSans = Geist({
   subsets: ["latin", "latin-ext"],
-  weight: ["400", "700"],
   display: "swap",
-  variable: "--font-atkinson",
+  variable: "--font-sans",
 });
 
-const plexMono = IBM_Plex_Mono({
+const geistMono = Geist_Mono({
   subsets: ["latin", "latin-ext"],
-  weight: ["400", "500"],
   display: "swap",
   variable: "--font-mono",
 });
@@ -71,7 +76,7 @@ export default function RootLayout({
       lang="pt-BR"
       data-theme="light"
       suppressHydrationWarning
-      className={`${atkinson.variable} ${plexMono.variable}`}
+      className={`${geistSans.variable} ${geistMono.variable}`}
     >
       <head>
         {/* Config pública do Supabase em runtime (imagem genérica self-host). */}

@@ -120,7 +120,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: [
-          "var(--font-atkinson)",
+          "var(--font-sans)",
           "ui-sans-serif",
           "system-ui",
           "-apple-system",
