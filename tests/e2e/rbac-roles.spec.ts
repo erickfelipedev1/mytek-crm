@@ -124,7 +124,7 @@ test.describe("rbac role matrix (spec 13 §4)", () => {
     await expectNoBlockingA11y(page, '[role="tablist"]');
 
     await page.goto("/app/kanban");
-    await expect(page.getByRole("heading", { name: "Pipelines" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Kanban" })).toBeVisible();
     await expectNoBlockingA11y(page);
   });
 
