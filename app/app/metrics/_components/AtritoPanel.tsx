@@ -5,8 +5,31 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { BlurFade } from "@/components/motion/blur-fade";
+import { NumberTicker } from "@/components/motion/number-ticker";
 import { useAtritoMetrics, useSalvarReguaAbandono } from "@/hooks/metrics/useAtritoMetrics";
 import { formatarMedida, type Medida, type Par } from "@/lib/metrics/atrito";
+
+/**
+ * O número grande de `eficiencia` sobe contando ao entrar na tela — mas só
+ * para as unidades que são um número simples de verdade. "segundos" formata
+ * como string composta ("3h 20min", ver `formatarDuracao`), incompatível com
+ * o formatador numérico único do NumberTicker; cai no texto estático de
+ * sempre em vez de arriscar mostrar um formato errado por causa de um efeito
+ * decorativo.
+ */
+function MedidaGrande({ m }: { m: Medida }) {
+  if (m.valor === null || !Number.isFinite(m.valor) || m.unidade === "segundos") {
+    return <>{formatarMedida(m)}</>;
+  }
+  if (m.unidade === "razao") {
+    return <NumberTicker value={m.valor * 100} decimalPlaces={1} suffix="%" />;
+  }
+  if (m.unidade === "media") {
+    return <NumberTicker value={m.valor} decimalPlaces={1} />;
+  }
+  return <NumberTicker value={Math.round(m.valor)} />;
+}
 
 /**
  * Índice de Atrito (spec 17) — a medida do PROPÓSITO.
@@ -42,7 +65,9 @@ function ParCard({ par }: { par: Par }) {
       <CardContent className="flex flex-col gap-4 sm:flex-row">
         {/* Eficiência — o que o sistema é empurrado a maximizar. */}
         <div className="sm:w-48 sm:shrink-0">
-          <p className="text-2xl font-semibold tabular-nums">{formatarMedida(par.eficiencia)}</p>
+          <p className="text-2xl font-semibold tabular-nums">
+            <MedidaGrande m={par.eficiencia} />
+          </p>
           <p className="mt-1 text-sm text-muted-foreground">{par.eficiencia.rotulo}</p>
           {par.eficiencia.nota ? (
             <p className="mt-1 text-xs text-muted-foreground">{par.eficiencia.nota}</p>
@@ -166,8 +191,10 @@ export function AtritoPanel({ podeEditarRegua }: { podeEditarRegua: boolean }) {
       </div>
 
       <div className="flex flex-col gap-3">
-        {pares.map((p) => (
-          <ParCard key={p.chave} par={p} />
+        {pares.map((p, i) => (
+          <BlurFade key={p.chave} delay={0.08 + i * 0.05} offset={6}>
+            <ParCard par={p} />
+          </BlurFade>
         ))}
       </div>
 

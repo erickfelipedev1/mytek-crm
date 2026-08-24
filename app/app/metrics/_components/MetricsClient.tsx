@@ -5,6 +5,8 @@ import { useAttendantMetrics, type AttendantMetric } from "@/hooks/metrics/useAt
 import { AtritoPanel } from "./AtritoPanel";
 import { useTeamMembers } from "@/hooks/team/useTeamMembers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BlurFade } from "@/components/motion/blur-fade";
+import { NumberTicker } from "@/components/motion/number-ticker";
 import {
   Table,
   TableBody,
@@ -83,36 +85,44 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
           inteiro, ao qual as métricas de área se subordinam (doutrina §3.6).
           Não filtra por atendente — atrito é propriedade do sistema, e quebrá-lo
           por pessoa convida a otimização local que degrada o todo. */}
-      <AtritoPanel podeEditarRegua={canCompare} />
+      <BlurFade offset={8}>
+        <AtritoPanel podeEditarRegua={canCompare} />
+      </BlurFade>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            Funil {selectedOwner ? "do atendente" : ""} · {funnelTotal}{" "}
-            {funnelTotal === 1 ? "aberto" : "abertos"}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {metrics.funnel.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma etapa configurada.</p>
-          ) : (
-            metrics.funnel.map((s) => (
-              <div key={s.stage_id} className="flex items-center gap-3">
-                <span className="w-40 shrink-0 truncate text-sm">{s.stage_name}</span>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-primary transition-[width]"
-                    style={{ width: `${(s.count / maxCount) * 100}%` }}
+      <BlurFade delay={0.06} offset={8}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Funil {selectedOwner ? "do atendente" : ""} · {funnelTotal}{" "}
+              {funnelTotal === 1 ? "aberto" : "abertos"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            {metrics.funnel.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma etapa configurada.</p>
+            ) : (
+              metrics.funnel.map((s) => (
+                <div key={s.stage_id} className="flex items-center gap-3">
+                  <span className="w-40 shrink-0 truncate text-sm">{s.stage_name}</span>
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary transition-[width]"
+                      style={{ width: `${(s.count / maxCount) * 100}%` }}
+                    />
+                  </div>
+                  <NumberTicker
+                    value={s.count}
+                    className="w-8 shrink-0 text-right text-sm"
                   />
                 </div>
-                <span className="w-8 shrink-0 text-right text-sm tabular-nums">{s.count}</span>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </BlurFade>
 
-      <Card>
+      <BlurFade delay={0.12} offset={8}>
+        <Card>
         <CardHeader>
           <CardTitle className="text-base">
             {canCompare ? "Performance por atendente" : "Sua performance"}
@@ -157,7 +167,8 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
             </Table>
           )}
         </CardContent>
-      </Card>
+        </Card>
+      </BlurFade>
     </div>
   );
 }

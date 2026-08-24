@@ -13,6 +13,7 @@ import type { Lead } from "@/lib/types/leads";
 import type { Pipeline, Stage } from "@/lib/kanban/types";
 import { StageColumn } from "./StageColumn";
 import { LeadDossier } from "./LeadDossier";
+import { BlurFade } from "@/components/motion/blur-fade";
 
 interface KanbanBoardProps {
   pipelineId: string;
@@ -233,21 +234,24 @@ export function KanbanBoard({
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
       <div className="flex h-full gap-3 overflow-x-auto p-4">
-        {data.stages.map((stage) => (
-          <StageColumn
-            key={stage.id}
-            stage={stage}
-            leads={grouped.get(stage.id) ?? []}
-            pipelineId={pipelineId}
-            ownerNames={ownerNames}
-            coolingIds={coolingIds}
-            reactivations={reactivations}
-            pulses={pulsesProp ?? queryResult.pulses}
-            canonicalTags={canonicalTags}
-            selectedLeadIds={selectedLeadIds}
-            onSelect={handleSelect}
-            onOpen={setDossieId}
-          />
+        {data.stages.map((stage, i) => (
+          // Entrada em cascata só na 1ª montagem (BlurFade.once), pra não
+          // repiscar as colunas a cada atualização em tempo real do board.
+          <BlurFade key={stage.id} delay={i * 0.06} offset={8}>
+            <StageColumn
+              stage={stage}
+              leads={grouped.get(stage.id) ?? []}
+              pipelineId={pipelineId}
+              ownerNames={ownerNames}
+              coolingIds={coolingIds}
+              reactivations={reactivations}
+              pulses={pulsesProp ?? queryResult.pulses}
+              canonicalTags={canonicalTags}
+              selectedLeadIds={selectedLeadIds}
+              onSelect={handleSelect}
+              onOpen={setDossieId}
+            />
+          </BlurFade>
         ))}
       </div>
       {leadDoDossie && (
