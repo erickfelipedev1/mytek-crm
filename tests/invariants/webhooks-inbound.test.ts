@@ -462,6 +462,75 @@ describe("POST /api/v1/webhooks/in/[token] (Task 6)", () => {
     // si (insertErr.code === "23505") fica sem cobertura direta de teste.
   });
 
+  // ── Identidade por E-MAIL ────────────────────────────────────────────────
+  // Estes dois casos existem porque o caminho do e-mail NÃO existia: o contato
+  // só era criado quando havia telefone, então um formulário de site sem campo
+  // de telefone — o formato mais comum — criava o lead e PERDIA o e-mail em
+  // silêncio (o mapeador consome a chave, então ela nem sobra em custom_fields).
+  // O gate de `caso 5` sempre aceitou e-mail sozinho; o que faltava era guardar.
+  it("caso 8 — payload só com nome e e-mail: cria contato com o e-mail (sem telefone)", async () => {
+    const email = "ana.contato@exemplo.com.br";
+    const res = await POST(jsonReq(TOKEN_JSON, { nome: "Ana Contato", email }), reqCtx(TOKEN_JSON));
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { data: { lead_id: string } };
+
+    const leadRows = rows(`select * from public.crm_leads where id = '${json.data.lead_id}'`);
+    expect(leadRows.length).toBe(1);
+    // O ponto da regressão: sem contato, o e-mail não teria onde morar.
+    expect(leadRows[0]!.contact_id).not.toBeNull();
+
+    const contactRows = rows(`select * from public.contacts where id = '${leadRows[0]!.contact_id}'`);
+    expect(contactRows.length).toBe(1);
+    expect(contactRows[0]!.email).toBe(email);
+    expect(contactRows[0]!.phone_number).toBeNull();
+  });
+
+  it("caso 9 — e-mail já tem contato ativo: reusa o contato existente, não duplica", async () => {
+    const preexistingId = "dddddddd-6666-4000-8000-000000000002";
+    const email = "duda.preexistente@exemplo.com.br";
+    sql(`
+      insert into public.contacts (id, organization_id, name, email, source)
+      values ('${preexistingId}', '${GOV_ORG}', 'Duda E-mail', '${email}', 'manual')
+      on conflict do nothing;
+    `);
+
+    // Maiúsculas de propósito: `email_normalized` é coluna gerada (lower+trim),
+    // e é contra ela que a busca compara — se a rota casasse pela coluna crua,
+    // este envio criaria um segundo contato para a mesma pessoa.
+    const res = await POST(
+      jsonReq(TOKEN_JSON, { nome: "Duda", email: "  Duda.Preexistente@Exemplo.com.BR " }),
+      reqCtx(TOKEN_JSON),
+    );
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { data: { lead_id: string } };
+
+    const leadRows = rows(`select * from public.crm_leads where id = '${json.data.lead_id}'`);
+    expect(leadRows.length).toBe(1);
+    expect(leadRows[0]!.contact_id).toBe(preexistingId);
+
+    const contactCount = Number(
+      rows(
+        `select count(*) as n from public.contacts where organization_id = '${GOV_ORG}' and email_normalized = '${email}'`,
+      )[0]!.n,
+    );
+    expect(contactCount).toBe(1);
+  });
+
+  it("caso 10 — com telefone E e-mail, o telefone manda (chave do WhatsApp)", async () => {
+    const res = await POST(
+      jsonReq(TOKEN_JSON, { nome: "Bia", telefone: "11966665555", email: "bia@exemplo.com.br" }),
+      reqCtx(TOKEN_JSON),
+    );
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { data: { lead_id: string } };
+    const leadRows = rows(`select * from public.crm_leads where id = '${json.data.lead_id}'`);
+    const contactRows = rows(`select * from public.contacts where id = '${leadRows[0]!.contact_id}'`);
+    expect(contactRows[0]!.phone_number).toBe("+5511966665555");
+    // O e-mail continua sendo gravado — o telefone decide a IDENTIDADE, não o
+    // que se guarda.
+    expect(contactRows[0]!.email).toBe("bia@exemplo.com.br");
+  });
+
   // ponytail: rate limit cai no fallback in-memory sem Upstash (sem env
   // configurada no vitest.db.config.ts) — esse fallback já é coberto por
   // unit test em lib/ai/dispatcher/rate-limit.ts. Provar o 429 aqui exigiria

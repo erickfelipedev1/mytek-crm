@@ -181,21 +181,40 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     return fail("invalid_request", "Nenhum campo mapeável (nome/telefone/email).", 400, { requestId });
   }
 
-  // Contato: upsert por telefone (se houver) — reusa a coluna E.164 canônica.
-  // is_merged_into null: contato mesclado não deve ser reaproveitado (o índice
-  // único uniq_contacts_org_phone só cobre a linha ativa por telefone).
+  // Contato: upsert pela IDENTIDADE do envio — telefone primeiro (é a chave do
+  // WhatsApp, canal primário), e-mail como segundo caminho.
+  //
+  // O ramo do e-mail não é enfeite: antes só existia o do telefone, e o gate
+  // logo acima aceita um envio que traga SÓ nome e e-mail (formulário de site
+  // costuma não pedir telefone). O lead era criado e o e-mail DESCARTADO —
+  // `mapped.email` não entra em `custom_fields` (o mapeador o consome) e sem
+  // contato não havia onde gravá-lo. Ou seja: a rota aceitava o envio e perdia
+  // em silêncio o único jeito de responder aquela pessoa.
+  //
+  // Os dois caminhos são simétricos porque os índices são: as duas parciais
+  // (uniq_contacts_org_phone e uniq_contacts_org_email) cobrem só a linha ATIVA
+  // — daí o `is_merged_into null`, e daí o mesmo tratamento de corrida (23505).
+  // `email_normalized` é coluna gerada (lower+trim), então a busca compara com
+  // o e-mail normalizado do mesmo jeito; quem é gravado é `email`.
+  const identidade: { coluna: "phone_number" | "email_normalized"; valor: string } | null =
+    mapped.phone
+      ? { coluna: "phone_number", valor: mapped.phone }
+      : mapped.email
+        ? { coluna: "email_normalized", valor: mapped.email.trim().toLowerCase() }
+        : null;
+
   let contactId: string | undefined;
-  if (mapped.phone) {
-    const selectActiveByPhone = () =>
+  if (identidade) {
+    const selectAtivoPelaIdentidade = () =>
       admin
         .from("contacts")
         .select("id")
         .eq("organization_id", source.organization_id)
-        .eq("phone_number", mapped.phone)
+        .eq(identidade.coluna, identidade.valor)
         .is("is_merged_into", null)
         .maybeSingle();
 
-    const { data: existing } = await selectActiveByPhone();
+    const { data: existing } = await selectAtivoPelaIdentidade();
     if (existing) {
       contactId = existing.id as string;
     } else {
@@ -203,7 +222,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
         .from("contacts")
         .insert({
           organization_id: source.organization_id,
-          name: mapped.name ?? mapped.phone,
+          name: mapped.name ?? mapped.phone ?? mapped.email,
           phone_number: mapped.phone,
           email: mapped.email,
           source: "webhook",
@@ -213,10 +232,10 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
         .maybeSingle();
       if (insertErr) {
         if (insertErr.code === "23505") {
-          // Corrida: outro POST concorrente com o mesmo telefone novo já
+          // Corrida: outro POST concorrente com a mesma identidade nova já
           // criou o contato entre o select e o insert. Re-seleciona o
           // vencedor em vez de deixar o lead órfão.
-          const { data: winner } = await selectActiveByPhone();
+          const { data: winner } = await selectAtivoPelaIdentidade();
           contactId = (winner?.id as string | undefined) ?? undefined;
         } else {
           logger.error("[webhooks.inbound] contact insert failed", {
