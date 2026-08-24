@@ -14,11 +14,12 @@ export default async function MetricsPage() {
   return (
     <div className="flex h-full flex-col gap-6 p-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Desempenho</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground">
           {canCompare
             ? "Atrito, funil e performance por atendente nos últimos 30 dias."
-            : "Atrito, seu funil e sua performance nos últimos 30 dias."}
+            : "Atrito, seu funil e sua performance nos últimos 30 dias."}{" "}
+          Atualiza sozinho a cada 30s.
         </p>
       </header>
 
