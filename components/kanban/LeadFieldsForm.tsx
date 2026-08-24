@@ -19,6 +19,14 @@ interface FormShape {
   valueReais: string;
   tagsRaw: string;
   expected_close_date: string;
+  empresa: string;
+  segmento: string;
+  momento: string;
+}
+
+function customField(fields: Record<string, unknown>, key: string): string {
+  const v = fields[key];
+  return typeof v === "string" ? v : "";
 }
 
 interface Props {
@@ -54,6 +62,9 @@ export function LeadFieldsForm({ lead, pipelineId, onSaved, onCancel }: Props) {
       valueReais: centsToReais(lead.value_cents),
       tagsRaw: (lead.tags ?? []).join(", "),
       expected_close_date: lead.expected_close_date ?? "",
+      empresa: customField(lead.custom_fields ?? {}, "empresa"),
+      segmento: customField(lead.custom_fields ?? {}, "segmento"),
+      momento: customField(lead.custom_fields ?? {}, "momento"),
     },
   });
 
@@ -64,6 +75,9 @@ export function LeadFieldsForm({ lead, pipelineId, onSaved, onCancel }: Props) {
       valueReais: centsToReais(lead.value_cents),
       tagsRaw: (lead.tags ?? []).join(", "),
       expected_close_date: lead.expected_close_date ?? "",
+      empresa: customField(lead.custom_fields ?? {}, "empresa"),
+      segmento: customField(lead.custom_fields ?? {}, "segmento"),
+      momento: customField(lead.custom_fields ?? {}, "momento"),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead.id]);
@@ -90,6 +104,11 @@ export function LeadFieldsForm({ lead, pipelineId, onSaved, onCancel }: Props) {
       value_cents: valueCents,
       tags,
       expected_close_date: values.expected_close_date || null,
+      custom_fields: {
+        empresa: values.empresa.trim(),
+        segmento: values.segmento.trim(),
+        momento: values.momento.trim(),
+      },
     };
 
     const parsed = updateLeadSchema.safeParse(patch);
@@ -151,6 +170,22 @@ export function LeadFieldsForm({ lead, pipelineId, onSaved, onCancel }: Props) {
               {...form.register("expected_close_date")}
             />
           </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="empresa">Empresa</Label>
+            <Input id="empresa" {...form.register("empresa")} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="segmento">Segmento</Label>
+            <Input id="segmento" {...form.register("segmento")} />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="momento">Momento</Label>
+          <Input id="momento" {...form.register("momento")} />
         </div>
 
         <div className="space-y-2">

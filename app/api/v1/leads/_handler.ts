@@ -397,6 +397,15 @@ export async function updateLeadHandler(
     patch.expected_close_date = input.expected_close_date;
   }
   if (input.tags !== undefined) patch.tags = input.tags;
+  // Merge raso, nunca substitui o objeto inteiro: outras chaves gravadas por
+  // fonte diferente (ex.: UTMs do webhook de captação) sobrevivem à edição
+  // manual de empresa/segmento/momento pelo dossiê.
+  if (input.custom_fields !== undefined) {
+    patch.custom_fields = {
+      ...((existing.custom_fields as Record<string, unknown> | null) ?? {}),
+      ...input.custom_fields,
+    };
+  }
 
   // O filtro entra AQUI TAMBÉM, e não só no SELECT acima: entre ler e escrever
   // há uma janela, e defesa que depende de uma leitura anterior é defesa que

@@ -104,6 +104,13 @@ export const updateLeadSchema = z.object({
     .nullable()
     .optional(),
   tags: z.array(z.string()).optional(),
+  /**
+   * Merge raso com o `custom_fields` existente (nunca substitui o objeto
+   * inteiro) — ver updateLeadHandler. Mantém o mesmo tipo solto que o
+   * webhook de captação já grava, em vez de reintroduzir aqui o schema
+   * declarativo por pipeline que ainda não existe (ver CLAUDE.md).
+   */
+  custom_fields: z.record(z.string(), z.string().max(500)).optional(),
 });
 export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
 
