@@ -112,7 +112,7 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
   const attendantChartData = metrics.attendants.map((a) => ({
     name: attendantLabel(a),
     Ganhos: a.won,
-    Perdidos: a.lost,
+    Perdas: a.lost,
   }));
 
   return (
@@ -148,7 +148,7 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
           <KpiCard label="Ganhos (30 dias)" value={totalGanhos} accent="var(--color-success)" />
         </BlurFade>
         <BlurFade delay={0.08} offset={8}>
-          <KpiCard label="Perdidos (30 dias)" value={totalPerdidos} accent="var(--color-error)" />
+          <KpiCard label="Perdas (30 dias)" value={totalPerdidos} accent="var(--color-error)" />
         </BlurFade>
         <BlurFade delay={0.12} offset={8}>
           <KpiCard label="Taxa de conversão" value={taxaConversao} decimalPlaces={1} suffix="%" />
@@ -248,7 +248,7 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
                     <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "var(--muted)" }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     <Bar dataKey="Ganhos" fill="var(--color-success)" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Perdidos" fill="var(--color-error)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Perdas" fill="var(--color-error)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : null}
@@ -258,7 +258,7 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
                   <TableRow>
                     <TableHead>Atendente</TableHead>
                     <TableHead className="text-right">Ganhos</TableHead>
-                    <TableHead className="text-right">Perdidos</TableHead>
+                    <TableHead className="text-right">Perdas</TableHead>
                     <TableHead className="text-right">Conversas</TableHead>
                     <TableHead className="text-right">1ª resposta (média)</TableHead>
                   </TableRow>
