@@ -33,5 +33,9 @@ export function useAttendantMetrics(owner: string | null) {
     queryKey: ["metrics", "attendants", owner ?? "all"],
     queryFn: async () => apiClient.get<{ data: AttendantMetrics }>(`/api/v1/metrics/attendants${qs}`),
     staleTime: 30_000,
+    // Dashboard automático (spec: renomeado de "Desempenho"): busca de novo sozinho
+    // em segundo plano, sem precisar recarregar a página.
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }

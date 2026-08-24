@@ -368,8 +368,8 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   // ---- Análise — olhar o sistema funcionando ----
   {
     href: "/app/metrics",
-    label: "Desempenho",
-    description: "Funil e performance por atendente nos últimos 30 dias.",
+    label: "Dashboard",
+    description: "Funil e performance por atendente nos últimos 30 dias, atualizado automaticamente.",
     icon: ChartBar,
     group: "analise",
     sidebar: true,

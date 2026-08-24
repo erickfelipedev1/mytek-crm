@@ -35,5 +35,8 @@ export function useAtritoMetrics() {
     queryKey: ["metrics", "atrito"],
     queryFn: async () => apiClient.get<{ data: AtritoMetrics }>("/api/v1/metrics/atrito"),
     staleTime: 30_000,
+    // Dashboard automático: mesmo comportamento de useAttendantMetrics.
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }
