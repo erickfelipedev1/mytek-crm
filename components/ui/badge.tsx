@@ -20,8 +20,12 @@ const badgeVariants = cva(
       variant: {
         default:
           "border-transparent bg-accent-soft text-accent",
+        // text-text (não text-text-muted): #737373 sobre #f5f5f5 dá contraste
+        // 4.34, abaixo do mínimo WCAG AA de 4.5 — reprovava em qualquer lugar
+        // que usasse esta variante, não só onde o teste pegou (spec: axe
+        // color-contrast).
         neutral:
-          "border-border bg-surface-elevated text-text-muted",
+          "border-border bg-surface-elevated text-text",
         success:
           "border-transparent bg-success-bg text-success-fg",
         warning:
@@ -32,7 +36,7 @@ const badgeVariants = cva(
           "border-transparent bg-info-bg text-info-fg",
         // shadcn aliases
         secondary:
-          "border-border bg-surface-elevated text-text-muted",
+          "border-border bg-surface-elevated text-text",
         destructive:
           "border-transparent bg-error-bg text-error-fg",
         outline:
