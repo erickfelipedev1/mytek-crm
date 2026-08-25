@@ -38,7 +38,7 @@ feature teria que reconstruir porta, timeline e log próprios).
 | `conversations.channel_session_id` vira **nullable** | webchat não tem sessão WAHA (a coluna FK aponta pra `channel_sessions`, que tem telefone e engine) |
 | `messages.channel_session_id` vira **nullable** | idem, por mensagem |
 | Índice único parcial `uniq_conversations_org_contact_webchat` | `conversations_unique_per_contact_session` inclui `channel_session_id`; com NULL o Postgres considera cada linha distinta e o contato ganharia conversa nova a cada mensagem |
-| `webhook_sources.kind text default 'form'` check `('form','webchat')` | reusa a fonte de captação que já existe |
+| `webhook_sources.kind` passa a aceitar `'webchat'` | a coluna **já existe** com `check (kind in ('lead_capture'))`; aqui o vocabulário é estendido, nunca trocado |
 | `webhook_sources.allowed_origins text[]` | CORS: só os domínios declarados podem abrir sessão |
 
 **Por que reusar `webhook_sources` em vez de tabela nova:** os campos são os

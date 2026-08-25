@@ -11254,13 +11254,14 @@ create unique index if not exists uniq_conversations_org_contact_webchat
   on public.conversations (organization_id, contact_id)
   where channel = 'webchat' and status <> all (array['closed'::text, 'archived'::text]);
 
-alter table public.webhook_sources
-  add column if not exists kind text not null default 'form';
+-- `kind` já nasce na criação da tabela com check (kind in ('lead_capture')).
+-- Aqui o vocabulário é ESTENDIDO, nunca trocado: recriar o CHECK sem
+-- 'lead_capture' rejeitaria toda linha que o clone já tem.
 alter table public.webhook_sources
   drop constraint if exists webhook_sources_kind_check;
 alter table public.webhook_sources
   add constraint webhook_sources_kind_check
-  check (kind = any (array['form'::text, 'webchat'::text]));
+  check (kind = any (array['lead_capture'::text, 'webchat'::text]));
 
 alter table public.webhook_sources
   add column if not exists allowed_origins text[] not null default '{}'::text[];

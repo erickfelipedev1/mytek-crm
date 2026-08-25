@@ -52,20 +52,25 @@ create unique index if not exists uniq_conversations_org_contact_webchat
   on public.conversations (organization_id, contact_id)
   where channel = 'webchat' and status <> all (array['closed'::text, 'archived'::text]);
 
--- ---- fonte de captação ganha tipo e origens permitidas ----
+-- ---- fonte de captação ganha o tipo webchat e origens permitidas ----
 -- Reusa `webhook_sources` em vez de tabela nova: os campos são os mesmos (org,
 -- pipeline, stage, path_token, is_active, last_received_at) e a tela
 -- /app/webhooks + o `crm_list_webhook_sources` do MCP já os renderizam — a
 -- feature nasce com tela e com porta.
-alter table public.webhook_sources
-  add column if not exists kind text not null default 'form';
-
+--
+-- `kind` JÁ EXISTE, com `default 'lead_capture' check (kind in ('lead_capture'))`
+-- na criação da tabela. Aqui o vocabulário é ESTENDIDO, não trocado: a primeira
+-- versão desta migration criava o valor 'form' como sinônimo de um conceito que
+-- já tinha nome e recriava o CHECK só com ('form','webchat') — o que rejeitava
+-- toda linha existente. O CI pegou (`webhook_sources_kind_check` violado por uma
+-- linha `lead_capture`), e é o modo de falha que a doutrina de migrations
+-- descreve: constraint criada sem conferir os dados que já estão lá.
 alter table public.webhook_sources
   drop constraint if exists webhook_sources_kind_check;
 
 alter table public.webhook_sources
   add constraint webhook_sources_kind_check
-  check (kind = any (array['form'::text, 'webchat'::text]));
+  check (kind = any (array['lead_capture'::text, 'webchat'::text]));
 
 -- CORS: só os domínios declarados abrem sessão de chat. Vazio = nenhuma origem
 -- de browser aceita, que é o default seguro para uma fonte `form` existente.
@@ -73,7 +78,7 @@ alter table public.webhook_sources
   add column if not exists allowed_origins text[] not null default '{}'::text[];
 
 comment on column public.webhook_sources.kind is
-  'form = captação de formulário (POST único vira lead); webchat = chat de site (abre conversa e troca mensagens).';
+  'lead_capture = captação de formulário (POST único vira lead); webchat = chat de site (abre conversa e troca mensagens).';
 
 comment on column public.webhook_sources.allowed_origins is
   'Origens de browser autorizadas a abrir sessão de webchat (Origin exato, ex.: https://mytek.com.br). Vazio bloqueia todas.';
