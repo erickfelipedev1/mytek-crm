@@ -240,7 +240,7 @@ export async function sendMessageHandler(
   // envio com 42703. Sem a coluna, nada está arquivado — e a consulta sem ela é a
   // consulta certa (ver lib/channels/archived).
   const convSelect = (comArchived: boolean) =>
-    `id, organization_id, contact_id, channel_session_id, is_group, group_chat_id, provider_conversation_id, contacts:contact_id(phone_number, wa_identity, wa_lid, is_blocked), channel_sessions:channel_session_id(${CHANNEL_SESSION_REF_COLUMNS}, status${comArchived ? `, ${ARCHIVED_AT}` : ""})`;
+    `id, organization_id, contact_id, channel, channel_session_id, is_group, group_chat_id, provider_conversation_id, contacts:contact_id(phone_number, wa_identity, wa_lid, is_blocked), channel_sessions:channel_session_id(${CHANNEL_SESSION_REF_COLUMNS}, status${comArchived ? `, ${ARCHIVED_AT}` : ""})`;
   const { data: conv, error: convErr } = await queryTolerantToMissingArchived(
     () => supabase.from("conversations").select(convSelect(true)).eq("id", input.conversation_id).maybeSingle(),
     () => supabase.from("conversations").select(convSelect(false)).eq("id", input.conversation_id).maybeSingle(),
@@ -257,7 +257,9 @@ export async function sendMessageHandler(
     id: string;
     organization_id: string;
     contact_id: string;
-    channel_session_id: string;
+    channel: string;
+    /** Nullable desde a 0149: webchat não tem sessão de transporte. */
+    channel_session_id: string | null;
     is_group: boolean;
     group_chat_id: string | null;
     /** Thread do provider, quando ele endereça por thread própria (migration 0132). */
@@ -332,10 +334,10 @@ export async function sendMessageHandler(
   }
   let message = created as unknown as Message;
 
-  // O canal vem da SESSÃO (migration 0087), não de um literal. O fallback só
-  // alcança o caso em que o embed não trouxe a sessão — impossível hoje
-  // (`conversations.channel_session_id` é NOT NULL com FK ON DELETE RESTRICT),
-  // e ainda assim mantido para não trocar o desfecho desse ramo defensivo.
+  // O canal vem da SESSÃO (migration 0087), não de um literal. O fallback
+  // alcança dois casos: o embed não ter trazido a sessão, e — desde a 0149 —
+  // a conversa de `webchat`, que não tem sessão nenhuma. No segundo, o adapter
+  // resolvido aqui não chega a ser usado: o ramo de webchat abaixo desvia antes.
   const adapter = getAdapter(c.channel_sessions?.provider ?? DEFAULT_CHANNEL_PROVIDER);
   const chatId = adapter.resolveRecipient({
     isGroup: c.is_group,
@@ -345,7 +347,25 @@ export async function sendMessageHandler(
     waLid: c.contacts?.wa_lid,
   });
 
-  if (c.channel_sessions?.archived_at) {
+  if (c.channel === "webchat") {
+    // Webchat não tem transporte externo: a entrega é o próprio visitante
+    // puxando o GET de /api/v1/webchat/[token]/messages. Gravar já como `sent`
+    // é o desfecho honesto — a mensagem está disponível para quem está no site
+    // no instante em que existe na tabela.
+    //
+    // Vem ANTES de tudo porque os três ramos seguintes perguntam pela SESSÃO, e
+    // webchat não tem: sem este desvio a mensagem cairia em
+    // `!c.channel_sessions` e ficaria `queued` para sempre — o atendente veria
+    // "enviada" no inbox e o site não receberia nada, que é exatamente o
+    // sintoma que a 0149 existe para matar.
+    const { data: updated } = await supabase
+      .from("messages")
+      .update({ status: "sent" })
+      .eq("id", message.id)
+      .select(MSG_COLS)
+      .maybeSingle();
+    if (updated) message = updated as unknown as Message;
+  } else if (c.channel_sessions?.archived_at) {
     // Canal ARQUIVADO = canal excluído pelo usuário: a sessão já foi deslogada e
     // removida do transporte, e a credencial do canal oficial já foi revogada. É a
     // promessa da migration 0106 ("não é mais elegível para envio") virando

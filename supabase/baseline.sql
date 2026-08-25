@@ -11226,6 +11226,44 @@ grant execute on function public.fn_lgpd_cascade_redact_contact(uuid, uuid, uuid
 grant execute on function public.fn_update_budget_consumption() to service_role;
 
 
+-- ---- canal webchat (migration 0149) ----
+-- Chat de site na mesma conversa do WhatsApp. Ver docs/specs/canal-webchat.md.
+-- Auto-curativo: todos os passos são idempotentes e nenhum depende de dados do
+-- tenant, então o `update.sh` de um clone antigo aplica sem tocar em linha viva.
+
+alter table public.conversations
+  drop constraint if exists conversations_channel_check;
+alter table public.conversations
+  add constraint conversations_channel_check
+  check (channel = any (array['whatsapp'::text, 'webchat'::text]));
+
+alter table public.conversations alter column channel_session_id drop not null;
+alter table public.messages      alter column channel_session_id drop not null;
+
+-- O canal antigo não afrouxa junto: whatsapp sem sessão ficaria `queued` para
+-- sempre. Nenhuma linha existente viola — a coluna era NOT NULL até 0149.
+alter table public.conversations
+  drop constraint if exists conversations_whatsapp_exige_sessao;
+alter table public.conversations
+  add constraint conversations_whatsapp_exige_sessao
+  check (channel <> 'whatsapp' or channel_session_id is not null);
+
+-- Uma conversa de webchat viva por contato: a unique existente inclui
+-- channel_session_id e, com NULL, o Postgres trata cada linha como distinta.
+create unique index if not exists uniq_conversations_org_contact_webchat
+  on public.conversations (organization_id, contact_id)
+  where channel = 'webchat' and status <> all (array['closed'::text, 'archived'::text]);
+
+alter table public.webhook_sources
+  add column if not exists kind text not null default 'form';
+alter table public.webhook_sources
+  drop constraint if exists webhook_sources_kind_check;
+alter table public.webhook_sources
+  add constraint webhook_sources_kind_check
+  check (kind = any (array['form'::text, 'webchat'::text]));
+
+alter table public.webhook_sources
+  add column if not exists allowed_origins text[] not null default '{}'::text[];
 
 
 notify pgrst, 'reload schema';
