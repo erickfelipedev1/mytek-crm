@@ -102,6 +102,8 @@ export async function POST(req: NextRequest): Promise<Response> {
       redirect_to: parsed.data.redirect_to ?? null,
       field_map: parsed.data.field_map,
       secret_encrypted: secretEncrypted,
+      kind: parsed.data.kind,
+      allowed_origins: parsed.data.allowed_origins,
     });
     return ok(criada, { requestId, status: 201 });
   } catch (err) {

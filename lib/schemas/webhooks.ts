@@ -36,10 +36,38 @@ export const actionSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
+/**
+ * Origem de browser, na forma EXATA que o header `Origin` traz:
+ * `https://site.com.br`, sem barra final, sem caminho.
+ *
+ * A comparação em `lib/webchat/source.ts` é `allowed.includes(origin)` —
+ * igualdade de string. Aceitar `https://site.com.br/` aqui gravaria um valor que
+ * nunca casa, e o sintoma seria um chat que não abre em site nenhum, sem erro
+ * que aponte a barra. Por isso o refine exige `v === new URL(v).origin`, que é a
+ * mesma normalização que o browser aplica.
+ */
+const origemDeBrowser = z
+  .string()
+  .trim()
+  .max(255)
+  .refine(
+    (v) => {
+      try {
+        const u = new URL(v);
+        return (u.protocol === "https:" || u.protocol === "http:") && v === u.origin;
+      } catch {
+        return false;
+      }
+    },
+    { message: "Use a origem exata, sem barra final nem caminho. Ex.: https://seusite.com.br" },
+  );
+
 export const createWebhookSourceSchema = z.object({
   name: z.string().min(1).max(120),
   default_pipeline_id: z.string().uuid(),
   default_stage_id: z.string().uuid(),
+  kind: z.enum(["lead_capture", "webchat"]).optional(),
+  allowed_origins: z.array(origemDeBrowser).max(20).optional(),
   redirect_to: z.string().url().max(2000).nullish(),
   field_map: z
     .object({

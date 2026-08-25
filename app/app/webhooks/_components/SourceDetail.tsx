@@ -89,6 +89,31 @@ export function SourceDetail({ source, open, onOpenChange }: Props) {
   const url = publicUrl(source.path_token);
   const events = eventsRes?.data ?? [];
 
+  // Chat e formulário são a mesma tabela, mas não a mesma coisa a explicar: o
+  // HTML de formulário, a URL de captação e o lead de teste não existem no chat,
+  // e o token e as origens não existem no formulário.
+  const ehWebchat = source.kind === "webchat";
+  const [origens, setOrigens] = React.useState(() => (source.allowed_origins ?? []).join("\n"));
+  const origensSalvas = (source.allowed_origins ?? []).join("\n");
+  const origensMudaram = origens.trim() !== origensSalvas.trim();
+
+  const salvarOrigens = async () => {
+    const lista = origens
+      .split(/[\n,]/)
+      .map((o) => o.trim().replace(/\/+$/, ""))
+      .filter((o) => o.length > 0);
+    try {
+      await update.mutateAsync({ id: source.id, allowed_origins: lista });
+      toast.success(
+        lista.length === 0
+          ? "Endereços removidos. O chat não vai abrir em nenhum site até você declarar um."
+          : "Endereços salvos.",
+      );
+    } catch {
+      /* erro já mostrado pelo showApiError */
+    }
+  };
+
   const sendTestLead = async () => {
     setTesting(true);
     setTestOk(false);
@@ -130,84 +155,156 @@ export function SourceDetail({ source, open, onOpenChange }: Props) {
             </Badge>
           </div>
           <SheetDescription>
-            Cada envio para o endereço abaixo vira um lead no seu funil, automaticamente.
+            {ehWebchat
+              ? "Quem escrever no chat do seu site vira uma conversa aqui, e o que você responder aparece lá."
+              : "Cada envio para o endereço abaixo vira um lead no seu funil, automaticamente."}
           </SheetDescription>
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
-          <section className="space-y-2">
-            <p className="text-sm font-medium text-text">Endereço da fonte</p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 truncate rounded-sm border border-border bg-muted px-3 py-2 text-xs">
-                {url}
-              </code>
-              <Button
-                type="button"
-                variant="secondary"
-                size="icon"
-                onClick={() => copy(url, "Endereço copiado.")}
-              >
-                <Copy />
-              </Button>
-            </div>
-          </section>
-
-          <section className="space-y-2">
-            <p className="text-sm font-medium text-text">Formulário pronto para colar no seu site</p>
-            <Textarea readOnly rows={6} value={formSnippet(url)} className="font-mono text-xs" />
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => copy(formSnippet(url), "Formulário copiado.")}
-            >
-              <Copy /> Copiar formulário
-            </Button>
-          </section>
-
-          <section className="space-y-2 rounded-sm border border-border">
-            <details className="group p-3">
-              <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-medium text-text">
-                Como conectar no seu caso
-                <CaretDown className="transition-transform group-open:rotate-180" />
-              </summary>
-              <div className="mt-3 space-y-4 text-sm text-muted-foreground">
-                <div>
-                  <p className="font-medium text-text">WordPress / Elementor</p>
-                  <p>Cole o endereço acima no campo &quot;Action&quot; (ou &quot;URL de envio&quot;) do seu formulário.</p>
+          {ehWebchat ? (
+            <>
+              <section className="space-y-2">
+                <p className="text-sm font-medium text-text">Token do chat</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 truncate rounded-sm border border-border bg-muted px-3 py-2 text-xs">
+                    {source.path_token}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    onClick={() => copy(source.path_token, "Token copiado.")}
+                  >
+                    <Copy />
+                  </Button>
                 </div>
-                <div>
-                  <p className="font-medium text-text">Zapier / n8n</p>
-                  <p>Use a ação &quot;Webhooks&quot; → POST, apontando para o endereço acima.</p>
-                </div>
-                <div>
-                  <p className="font-medium text-text">Formulário próprio</p>
-                  <p>Use o HTML pronto logo acima — já aponta para o endereço certo.</p>
-                </div>
-              </div>
-            </details>
-          </section>
+                <p className="text-xs text-muted-foreground">
+                  Cole em <code>NEXT_PUBLIC_WEBCHAT_TOKEN</code> no seu site. Ele fica visível no
+                  código da página, e tudo bem: quem autoriza são os endereços abaixo, não o
+                  sigilo do token.
+                </p>
+              </section>
 
-          <details className="rounded-sm border border-border p-3">
-            <summary className="cursor-pointer list-none text-sm font-medium text-text">
-              Para desenvolvedores
-            </summary>
-            <pre className="mt-3 overflow-x-auto rounded-sm bg-muted p-3 text-xs">
-              <code>{curlSnippet(url)}</code>
-            </pre>
-          </details>
+              <section className="space-y-2">
+                <p className="text-sm font-medium text-text">Endereços que podem abrir o chat</p>
+                <Textarea
+                  rows={3}
+                  value={origens}
+                  onChange={(e) => setOrigens(e.target.value)}
+                  placeholder={"https://seusite.com.br\nhttps://www.seusite.com.br"}
+                  className="font-mono text-xs"
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={!origensMudaram || update.isPending}
+                    onClick={salvarOrigens}
+                  >
+                    Salvar endereços
+                  </Button>
+                  {origensMudaram && (
+                    <span className="text-xs text-muted-foreground">Há mudanças não salvas.</span>
+                  )}
+                </div>
+                {(source.allowed_origins ?? []).length === 0 && (
+                  <p className="text-xs text-destructive">
+                    Sem nenhum endereço, o chat não abre em site nenhum — mesmo com a fonte ativa.
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Um por linha, sem barra no final. Se o seu site responde com e sem{" "}
+                  <code>www</code>, coloque os dois — são endereços diferentes para o navegador.
+                </p>
+              </section>
+            </>
+          ) : (
+            <>
+              <section className="space-y-2">
+                <p className="text-sm font-medium text-text">Endereço da fonte</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 truncate rounded-sm border border-border bg-muted px-3 py-2 text-xs">
+                    {url}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    onClick={() => copy(url, "Endereço copiado.")}
+                  >
+                    <Copy />
+                  </Button>
+                </div>
+              </section>
 
-          <section className="space-y-3">
-            <Button type="button" onClick={sendTestLead} disabled={testing}>
-              {testing ? "Enviando…" : "Enviar lead de teste"}
-            </Button>
-            {testOk ? (
-              <p className="text-sm">
-                <Link href="/app/kanban" className="text-accent underline underline-offset-4">
-                  Ver no Kanban
-                </Link>
-              </p>
-            ) : null}
-          </section>
+              <section className="space-y-2">
+                <p className="text-sm font-medium text-text">
+                  Formulário pronto para colar no seu site
+                </p>
+                <Textarea readOnly rows={6} value={formSnippet(url)} className="font-mono text-xs" />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => copy(formSnippet(url), "Formulário copiado.")}
+                >
+                  <Copy /> Copiar formulário
+                </Button>
+              </section>
+            </>
+          )}
+
+          {/* Instruções de formulário, cURL e lead de teste batem no endpoint de
+              captação, que agora RECUSA token de chat — mostrá-las numa fonte
+              webchat ensinaria um caminho que responde 404. */}
+          {!ehWebchat && (
+            <>
+              <section className="space-y-2 rounded-sm border border-border">
+                <details className="group p-3">
+                  <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-medium text-text">
+                    Como conectar no seu caso
+                    <CaretDown className="transition-transform group-open:rotate-180" />
+                  </summary>
+                  <div className="mt-3 space-y-4 text-sm text-muted-foreground">
+                    <div>
+                      <p className="font-medium text-text">WordPress / Elementor</p>
+                      <p>Cole o endereço acima no campo &quot;Action&quot; (ou &quot;URL de envio&quot;) do seu formulário.</p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-text">Zapier / n8n</p>
+                      <p>Use a ação &quot;Webhooks&quot; → POST, apontando para o endereço acima.</p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-text">Formulário próprio</p>
+                      <p>Use o HTML pronto logo acima — já aponta para o endereço certo.</p>
+                    </div>
+                  </div>
+                </details>
+              </section>
+
+              <details className="rounded-sm border border-border p-3">
+                <summary className="cursor-pointer list-none text-sm font-medium text-text">
+                  Para desenvolvedores
+                </summary>
+                <pre className="mt-3 overflow-x-auto rounded-sm bg-muted p-3 text-xs">
+                  <code>{curlSnippet(url)}</code>
+                </pre>
+              </details>
+
+              <section className="space-y-3">
+                <Button type="button" onClick={sendTestLead} disabled={testing}>
+                  {testing ? "Enviando…" : "Enviar lead de teste"}
+                </Button>
+                {testOk ? (
+                  <p className="text-sm">
+                    <Link href="/app/kanban" className="text-accent underline underline-offset-4">
+                      Ver no Kanban
+                    </Link>
+                  </p>
+                ) : null}
+              </section>
+            </>
+          )}
 
           <section className="space-y-2">
             <p className="text-sm font-medium text-text">Últimos recebimentos</p>
