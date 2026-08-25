@@ -42,22 +42,64 @@ ali é a prova de que a 0149 entra sem derrubar o banco de um clone.
 
 ## Fase 1 — CRM
 
-**1.1** Merge do PR #7 na `main`. O `publish-image.yml` dispara e publica
-`ghcr.io/<repo>:latest` (~6 min).
+> ### ⚠️ Antes de rodar o `update.sh` neste fork, leia
+>
+> **1. Merge na `main` NÃO chega à VPS.** O `update.sh` instala a última **tag**
+> publicada, não o topo da `main`:
+>
+> ```bash
+> TARGET_TAG="$(git tag -l 'v*' --sort=-v:refname | head -1)"
+> ```
+>
+> Mergear e rodar o `update.sh` faria ele responder "já está na versão mais
+> recente" e sair — com a 0149 **fora** do banco. O app não quebraria hoje, e é
+> isso que torna a armadilha ruim: você só descobriria quando o primeiro
+> visitante tentasse abrir o chat.
+>
+> **2. O `update.sh` aponta para a imagem do UPSTREAM.** A linha 158 fixa
+> `ghcr.io/melgarafael/deskcommcrm` e **grava isso no `.env`**, enquanto o
+> `publish-image.yml` deste fork publica em `ghcr.io/erickfelipedev1/mytek-crm`
+> (ele usa `${{ github.repository }}`). Rodá-lo como está substituiria o mytek
+> pelo DeskcommCRM genérico — sem a identidade visual, sem o dashboard, sem este
+> canal — rodando contra um banco com o schema deste fork.
+>
+> Confira antes, na VPS: `grep APP_IMAGE .env`
 
-**1.2** Na VPS, rode o atualizador do kit:
+**1.1** Merge do PR #7 na `main`.
+
+**1.2** **Publique uma tag** — é ela que o `update.sh` procura, e é ela que faz
+o `publish-image.yml` construir a imagem versionada:
 
 ```bash
-./update.sh
+git checkout main && git pull
+git tag v1.6.0          # a última é v1.5.0
+git push mytek v1.6.0
 ```
 
-Ele faz, nesta ordem: baixa o código novo → **re-aplica o `baseline.sql`**
-(é assim que a 0149 chega ao banco) → puxa a imagem nova → reinicia → confere se
-o app voltou.
+Acompanhe o build (~6 min) e confirme que a imagem existe **no seu fork**:
 
-> Se por algum motivo for fazer o deploy à mão em vez do `update.sh`, os **dois**
-> `-f` são obrigatórios — ver `deploy.md` §1. Omitir o `docker-compose.traefik.yml`
-> faz o domínio inteiro responder 404 com o contêiner `healthy`.
+```bash
+docker buildx imagetools inspect ghcr.io/erickfelipedev1/mytek-crm:1.6.0
+```
+
+**1.3** Na VPS:
+
+```bash
+bash hostgator-setup-kit/update.sh
+```
+
+Ele faz, nesta ordem: backup do banco → checkout da tag → **re-aplica o
+`baseline.sql`** (é assim que a 0149 chega ao banco) → puxa a imagem → reinicia →
+confere a saúde.
+
+Re-aplicar o baseline gera muitos avisos `já existe` e `multiple primary keys`:
+**é esperado e inofensivo** — o modo update roda sem `ON_ERROR_STOP` de
+propósito, e o script filtra esse ruído.
+
+> Se preferir o deploy à mão, os **dois** `-f` são obrigatórios — ver
+> `deploy.md` §1. Omitir o `docker-compose.traefik.yml` faz o domínio inteiro
+> responder 404 com o contêiner `healthy`. Mas atenção: o caminho manual **não
+> aplica o `baseline.sql`**, então a 0149 não chegaria ao banco.
 
 **1.3** Verifique antes de seguir:
 
