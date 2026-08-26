@@ -47,7 +47,10 @@ CURRENT_TAG="$(git describe --tags --exact-match HEAD 2>/dev/null || true)"
 # (Veio da `main`; a versão por tag cai exatamente na mesma armadilha, porque a
 # comparação de tags também fica satisfeita com a imagem velha no lugar.)
 image_desatualizada() {
-  local img="${APP_IMAGE:-ghcr.io/melgarafael/deskcommcrm:latest}" local_d remote_d
+  # O default é o repositório DESTA instalação (ver repo_da_imagem em
+  # _common.sh), não o do upstream: num fork, perguntar ao registro errado se a
+  # imagem está velha responde sobre uma imagem que este servidor nunca rodou.
+  local img="${APP_IMAGE:-$(repo_da_imagem):latest}" local_d remote_d
   local_d="$(docker image inspect "$img" --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}' 2>/dev/null | sed 's/.*@//')"
   [ -z "$local_d" ] && return 0                 # nem baixada ainda → atualizar
   remote_d="$(docker buildx imagetools inspect "$img" 2>/dev/null | awk '/^Digest:/{print $2; exit}')"
@@ -155,8 +158,15 @@ step "Baixando a versão nova do app e reiniciando"
 # acima) e a imagem do container sejam sempre da mesma versão. Gravada no .env,
 # não só exportada: o compose lê a imagem de lá, e um `up -d` rodado à mão
 # depois voltaria pro ":latest" do install — desfazendo a atualização.
-export APP_IMAGE="ghcr.io/melgarafael/deskcommcrm:${TARGET_TAG#v}"
+#
+# O REPOSITÓRIO vem de repo_da_imagem() (_common.sh): cada fork publica a imagem
+# dele (`ghcr.io/${{ github.repository }}` no publish-image.yml), e fixar o do
+# upstream aqui baixava o app de OUTRO projeto por cima deste — contra um banco
+# onde o `baseline.sql` deste acabou de ser aplicado, e gravado no .env, então
+# todo `up -d` posterior repetia. A tag continua vindo do TARGET_TAG.
+export APP_IMAGE="$(repo_da_imagem):${TARGET_TAG#v}"
 set_env_var .env APP_IMAGE "$APP_IMAGE"
+c_dim "  (imagem: $APP_IMAGE)"
 # Devolve a política padrão: um rollback anterior deixou "missing" no .env
 # (porque a imagem de volta é um ID local, que não se puxa do registro), e
 # ninguém desfazia isso — o `up -d` manual do dono parava de puxar imagem para

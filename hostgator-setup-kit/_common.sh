@@ -288,6 +288,77 @@ enter_project() {
 # psql efêmero via container (não exige psql no host).
 psql_run() { docker run --rm -i postgres:17-alpine psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 "$@"; }
 
+# ── De QUAL repositório sai a imagem do app ──────────────────────────────────
+# O `.github/workflows/publish-image.yml` publica em
+# `ghcr.io/${{ github.repository }}` — ou seja, CADA FORK publica a imagem dele,
+# com o nome dele. Fixar `ghcr.io/melgarafael/deskcommcrm` no script fazia todo
+# fork que rodasse o update.sh baixar a imagem do UPSTREAM por cima do próprio
+# app: o `baseline.sql` DO FORK acabara de ser aplicado ao banco, e por cima
+# dele subia o código de outro projeto — sem a identidade visual, sem as telas
+# próprias, contra um schema que não conhece. E, como a escolha é GRAVADA no
+# .env (set_env_var, logo abaixo), o estrago sobrevivia ao script: todo
+# `docker compose up -d` posterior repetia o erro, para sempre.
+#
+# A regra que fecha isso: a imagem sai de onde sai o CÓDIGO. Quem entrega o
+# código aqui é a `origin` — é dela que o update.sh faz `fetch --tags` e o
+# checkout da tag —, então é dela que o nome da imagem é derivado. Precedência:
+#
+#   1. APP_IMAGE_REPO no .env — a palavra final de quem sabe o que quer (ex.:
+#      instalação cuja `origin` é o upstream mas que roda imagem própria).
+#   2. a `origin`, quando ela é do GitHub — o caso de todo fork instalado.
+#   3. o upstream — último recurso: clone sem remote, espelho, tarball.
+#
+# O que NÃO muda: a TAG continua vindo do TARGET_TAG (instalar por tag é decisão
+# de projeto, documentada), e a escolha continua sendo gravada no .env. Aqui só
+# se corrige QUAL repositório é gravado.
+UPSTREAM_IMAGE_REPO="ghcr.io/melgarafael/deskcommcrm"
+
+# Puro (testável sem git): "owner/repo" em minúsculas a partir da URL de um
+# remote do GitHub. Vazio para QUALQUER outra coisa — `file://`, caminho local,
+# GitLab, Bitbucket — porque o GHCR só existe para o GitHub, e chutar um nome
+# ali viraria um `docker pull` de imagem inventada, que falha longe daqui.
+# Minúsculas porque o GHCR só aceita assim, e o nome do repositório não é
+# (`melgarafael/DeskcommCRM` publica em `ghcr.io/melgarafael/deskcommcrm` — é o
+# que o docker/metadata-action faz no workflow).
+owner_repo_do_github() {  # owner_repo_do_github <url do remote>
+  local url="${1:-}" path
+  case "$url" in
+    https://github.com/*|http://github.com/*)     path="${url#*//github.com/}" ;;
+    # remote com credencial embutida (fork privado clonado com token)
+    https://*@github.com/*|http://*@github.com/*) path="${url#*@github.com/}" ;;
+    git@github.com:*)                             path="${url#git@github.com:}" ;;
+    ssh://git@github.com/*)                       path="${url#ssh://git@github.com/}" ;;
+    *) return 0 ;;
+  esac
+  path="${path%.git}"; path="${path%/}"
+  # exatamente dois segmentos não vazios: nem `/repo`, nem `owner`, nem
+  # `owner/repo/algo`. Fora dessa forma, devolver vazio e cair no fallback é
+  # mais seguro que montar um nome torto.
+  case "$path" in
+    /*|*/*/*) return 0 ;;
+    */*)      : ;;
+    *)        return 0 ;;
+  esac
+  printf '%s' "$path" | tr '[:upper:]' '[:lower:]'
+}
+
+# O repositório da imagem desta instalação, aplicando a precedência acima.
+# Chamada de dentro do diretório do projeto (o `git` precisa enxergar o repo).
+#
+# `git config --get`, e NÃO `git remote get-url`: o segundo aplica as reescritas
+# de `url.<base>.insteadOf`, que são rota de TRANSPORTE (um espelho local, uma
+# troca ssh↔https), não identidade. Com um espelho configurado, o get-url
+# devolve o endereço do espelho e a derivação perderia o nome do fork. Medido:
+# com `url."file:///tmp/src".insteadOf https://github.com/dono/repo.git`, o
+# get-url responde `file:///tmp/src` e o `--get` responde a URL do GitHub.
+repo_da_imagem() {
+  [ -n "${APP_IMAGE_REPO:-}" ] && { printf '%s' "$APP_IMAGE_REPO"; return 0; }
+  local nome
+  nome="$(owner_repo_do_github "$(git config --get remote.origin.url 2>/dev/null || true)")"
+  [ -n "$nome" ] && { printf 'ghcr.io/%s' "$nome"; return 0; }
+  printf '%s' "$UPSTREAM_IMAGE_REPO"
+}
+
 # Grava (ou reescreve) uma chave no .env — sem duplicar linha se ela já existe.
 #   set_env_var .env APP_IMAGE ghcr.io/…:1.1.0
 #

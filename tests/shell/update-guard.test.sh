@@ -309,6 +309,54 @@ check "sem tag nenhuma conhecida e sem conseguir buscar, o heartbeat diz que nã
 check "e não anuncia versão nenhuma" \
   grep -q '"latest_version":""' "$CURL_LOG"
 
+echo "── 10. Num FORK, a imagem gravada no .env é a DO FORK, não a do upstream"
+# O publish-image.yml publica em `ghcr.io/${{ github.repository }}`: cada fork
+# publica a imagem dele. O update.sh fixava `ghcr.io/melgarafael/deskcommcrm` e
+# GRAVAVA isso no .env — num fork, o `docker pull` trazia o app do UPSTREAM por
+# cima do próprio, contra um banco onde o `baseline.sql` DO FORK acabara de ser
+# aplicado, e todo `up -d` posterior repetia o erro por causa do .env.
+FORK="$WORK/fork"
+git clone --quiet "file://$SRC" "$FORK"
+cd "$FORK" || exit 1
+# `insteadOf` desvia o FETCH para o fixture local (a prova não toca a rede),
+# enquanto `git remote get-url origin` — que é o que `repo_da_imagem` lê —
+# continua devolvendo a URL do fork no GitHub. É a topologia de uma VPS que
+# instalou de um fork.
+git config url."file://$SRC".insteadOf https://github.com/erickfelipedev1/mytek-crm.git
+git remote set-url origin https://github.com/erickfelipedev1/mytek-crm.git
+# Estado de quem instalou com o default antigo: .env apontando para o upstream.
+cp "$RASO/.env" .env; chmod 600 .env
+git checkout --quiet v0.9.0
+run_update --to v1.1.0
+check "a atualização termina com sucesso" test "$RC" -eq 0
+check ".env aponta para a imagem DO FORK, na tag instalada" \
+  grep -q '^APP_IMAGE=ghcr.io/erickfelipedev1/mytek-crm:1.1.0$' .env
+check "e NÃO para a do upstream (era exatamente o defeito)" \
+  test -z "$(grep -F 'APP_IMAGE=ghcr.io/melgarafael' .env || true)"
+check "a chave APP_IMAGE não duplicou" test "$(grep -c '^APP_IMAGE=' .env)" -eq 1
+
+# A MESMA derivação na outra ocorrência: `image_desatualizada()` decide se a
+# imagem que roda aqui está velha, e o default dela era o upstream também — num
+# fork, perguntava ao registro errado sobre uma imagem que este servidor nunca
+# rodou. Só cai no default quando o .env não tem APP_IMAGE, e só é consultada no
+# caminho MESMA_TAG (código já na tag alvo), que é o estado de agora.
+grep -v '^APP_IMAGE=' .env > .env.t && mv .env.t .env && chmod 600 .env
+: > "$DOCKER_LOG"
+run_update --to v1.1.0
+check "sem APP_IMAGE no .env, a checagem de imagem velha pergunta pelo FORK" \
+  test -n "$(grep -F 'image inspect ghcr.io/erickfelipedev1/mytek-crm:latest' "$DOCKER_LOG" || true)"
+check "e não pergunta pela imagem do upstream" \
+  test -z "$(grep -F 'ghcr.io/melgarafael' "$DOCKER_LOG" || true)"
+
+echo "── 11. APP_IMAGE_REPO no .env vence a derivação (origin no upstream, imagem própria)"
+printf 'APP_IMAGE_REPO=ghcr.io/outro/lugar\n' >> .env
+git checkout --quiet v0.9.0
+run_update --to v1.1.0 --force
+check "a imagem sai de APP_IMAGE_REPO, não da origin" \
+  grep -q '^APP_IMAGE=ghcr.io/outro/lugar:1.1.0$' .env
+check "APP_IMAGE_REPO sobreviveu à reescrita do .env" \
+  grep -q '^APP_IMAGE_REPO=ghcr.io/outro/lugar$' .env
+
 echo
 if [ "$FAILS" -eq 0 ]; then echo "OK — todas as provas passaram."; else echo "FALHOU — $FAILS prova(s)."; fi
 exit $((FAILS > 0))

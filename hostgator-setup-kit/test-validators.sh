@@ -1310,6 +1310,70 @@ np_ok /root/_123         123
 np_ok /root/deskcomm.crm deskcommcrm
 np_ok /root/crm_cliente  crm_cliente
 
+echo "imagem do app: de qual repositório ela sai (fork x upstream)"
+# O publish-image.yml publica em `ghcr.io/${{ github.repository }}` — cada fork
+# publica a imagem DELE. O update.sh fixava `ghcr.io/melgarafael/deskcommcrm` e
+# GRAVAVA isso no .env: num fork, ele baixava o app do upstream por cima do
+# próprio, contra um banco onde o baseline.sql do fork acabara de ser aplicado —
+# e todo `up -d` posterior repetia, porque a escolha ficou no .env.
+gh_ok() {  # gh_ok <url> <esperado ("" = não é remote do GitHub)>
+  local real; real="$(owner_repo_do_github "$1")"
+  if [ "$real" = "$2" ]; then printf '  ✓ %s → [%s]\n' "${1:-<vazio>}" "$real"
+  else printf '  ✗ %s → deu [%s], esperava [%s]\n' "${1:-<vazio>}" "$real" "$2"; fail=1; fi
+}
+gh_ok https://github.com/erickfelipedev1/mytek-crm.git erickfelipedev1/mytek-crm
+gh_ok https://github.com/erickfelipedev1/mytek-crm     erickfelipedev1/mytek-crm
+gh_ok git@github.com:erickfelipedev1/mytek-crm.git     erickfelipedev1/mytek-crm
+gh_ok ssh://git@github.com/erickfelipedev1/mytek-crm.git erickfelipedev1/mytek-crm
+gh_ok https://github.com/erickfelipedev1/mytek-crm/    erickfelipedev1/mytek-crm
+# Maiúsculas: o GHCR só aceita minúsculas, e o nome do repo upstream não é.
+# Sem o tr, o `docker pull` morre em "invalid reference format".
+gh_ok https://github.com/melgarafael/DeskcommCRM.git   melgarafael/deskcommcrm
+# Fork privado clonado com token embutido no remote.
+gh_ok https://ghp_xxx@github.com/erickfelipedev1/mytek-crm.git erickfelipedev1/mytek-crm
+# Nada disso é GitHub: devolver vazio (e cair no upstream) é mais seguro que
+# montar um nome de imagem que não existe em registro nenhum.
+gh_ok ""                                        ""
+gh_ok file:///tmp/src                           ""
+gh_ok /root/deskcommcrm                         ""
+gh_ok https://gitlab.com/alguem/projeto.git     ""
+gh_ok https://github.com/soUmSegmento          ""
+gh_ok https://github.com/o/r/a                  ""
+gh_ok https://github.com//repo                  ""
+
+# ── A precedência inteira, num repo git descartável ─────────────────────────
+IMG_TMP="$SUITE_TMP/img"
+mkdir -p "$IMG_TMP"; ( cd "$IMG_TMP" && git init --quiet )
+ri_ok() {  # ri_ok <descrição> <esperado>
+  local real; real="$( cd "$IMG_TMP" && repo_da_imagem )"
+  if [ "$real" = "$2" ]; then printf '  ✓ %s → %s\n' "$1" "$real"
+  else printf '  ✗ %s → deu [%s], esperava [%s]\n' "$1" "$real" "$2"; fail=1; fi
+}
+( cd "$IMG_TMP" && git remote add origin https://github.com/erickfelipedev1/mytek-crm.git )
+ri_ok "fork: a imagem sai do repositório do fork, não do upstream" \
+  ghcr.io/erickfelipedev1/mytek-crm
+( cd "$IMG_TMP" && git remote set-url origin https://github.com/melgarafael/DeskcommCRM.git )
+ri_ok "upstream: continua exatamente como antes desta mudança" \
+  ghcr.io/melgarafael/deskcommcrm
+# APP_IMAGE_REPO ganha da origin: é a saída de quem tem a origin no upstream mas
+# roda imagem própria. Vale por ser explícito, e é onde a pessoa corrige quando
+# a derivação não serve para o caso dela.
+APP_IMAGE_REPO=ghcr.io/outro/lugar ri_ok "APP_IMAGE_REPO do .env tem a palavra final" \
+  ghcr.io/outro/lugar
+# Sem remote nenhum (tarball, espelho, clone sem origin): cair no upstream é o
+# comportamento antigo — nada regride para quem já estava assim.
+( cd "$IMG_TMP" && git remote remove origin )
+ri_ok "sem remote: fallback no upstream (comportamento antigo preservado)" \
+  ghcr.io/melgarafael/deskcommcrm
+# Fora de repositório git: o `git remote` falha, e falhar não pode derrubar o
+# script (roda com `set -e` sob o cron do agente, sem ninguém lendo a tela).
+IMG_NAOGIT="$SUITE_TMP/img-nao-git"; mkdir -p "$IMG_NAOGIT"
+if [ "$( cd "$IMG_NAOGIT" && repo_da_imagem )" = "ghcr.io/melgarafael/deskcommcrm" ]; then
+  printf '  ✓ fora de um repositório git: fallback, sem derrubar o script\n'
+else
+  printf '  ✗ fora de um repositório git: não caiu no upstream\n'; fail=1
+fi
+
 echo "re-execução: o kit é chamado por caminho RELATIVO, como o README manda"
 # O harness acima sempre invoca `bash "$VPS_RAIZ/$script"` — ABSOLUTO. O README
 # documenta `bash install.sh` (:34) e a re-execução como suportada (:126, :138),
