@@ -118,15 +118,18 @@ function makeSupabase(
       if (table === 'meta_templates') {
         // O espelho local do template. `templateRow` é injetado por caso; null
         // simula template que não existe (ou WABA errada).
-        return {
-          select: () => ({
-            eq: () => ({
-              eq: () => ({
-                eq: () => ({ maybeSingle: async () => ({ data: templateRow, error: null }) }),
-              }),
-            }),
-          }),
+        //
+        // A cadeia é ENCADEÁVEL SEM LIMITE de propósito. A versão anterior tinha
+        // exatamente três `eq` aninhados, e isso fazia o dublê ditar quantos
+        // filtros o código de produção podia usar: acrescentar um quarto (a
+        // conexão dona da definição, da 0144) quebrava com `q.eq is not a
+        // function` — um vermelho que não fala do comportamento sob teste e
+        // manda quem lê procurar defeito onde não há.
+        const cadeia: Record<string, unknown> = {
+          eq: () => cadeia,
+          maybeSingle: async () => ({ data: templateRow, error: null }),
         };
+        return { select: () => cadeia };
       }
       if (table === 'messages') {
         return {
@@ -150,6 +153,20 @@ function makeSupabase(
             };
           },
         };
+      }
+      if (table === "contacts") {
+        // O envio carimba `contacts.last_activity_at` (migration 0162). O dublê
+        // é encadeável SEM LIMITE de propósito: a consulta filtra por id E por
+        // organização (este handler também roda com o client de service role,
+        // que bypassa RLS), e um dublê que fixa a quantidade de `eq` quebra
+        // quando a consulta ganha um filtro novo — com um erro que não fala do
+        // comportamento sob teste.
+        const cadeiaContacts: Record<string, unknown> = {
+          eq: () => cadeiaContacts,
+          then: (resolve: (v: { error: null }) => unknown) =>
+            Promise.resolve({ error: null }).then(resolve),
+        };
+        return { update: () => cadeiaContacts };
       }
       throw new Error(`fake_supabase: tabela inesperada '${table}'`);
     },

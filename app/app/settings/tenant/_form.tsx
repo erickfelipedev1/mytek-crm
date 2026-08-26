@@ -124,7 +124,7 @@ export function TenantForm({ initial }: Props) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="pt-BR">Português (BR)</SelectItem>
-                <SelectItem value="en-US">English (US)</SelectItem>
+                <SelectItem value="es">Español</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -163,8 +163,8 @@ export function TenantForm({ initial }: Props) {
           </p>
         </div>
 
-        <div className="flex justify-end">
-          <Button type="submit" disabled={isPending}>
+        <div className="flex sm:justify-end">
+          <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
             {isPending ? "Salvando…" : "Salvar"}
           </Button>
         </div>

@@ -6,6 +6,7 @@
  * mostra o valor); preenchido = override desta conexão.
  */
 import { useEffect, useMemo, useState } from "react";
+import { FUSOS_OFERECIDOS } from "@/lib/tempo/fusos";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useUpdatePacingKnobs, type PacingKnobsItem } from "@/hooks/channels/usePacingKnobs";
 import { ApiError } from "@/lib/api/types";
+import { nomeDoCanal } from "@/lib/channels/estado";
 
 interface Props {
   item: PacingKnobsItem | null;
@@ -76,8 +78,10 @@ export function AntiBanSheet({ item, canWrite, onClose }: Props) {
 
   const label = useMemo(() => {
     if (!item) return "";
-    const s = item.channel_session;
-    return s.display_name || s.phone_number || s.waha_session_name || "Conexão";
+    // Mesma cadeia que vazava `org_xxxx` no seletor do editor de agente: o
+    // identificador do transporte era o penúltimo degrau, então uma conexão sem
+    // apelido e sem número aparecia com ele no título do painel.
+    return nomeDoCanal(item.channel_session);
   }, [item]);
 
   if (!item || !form) return null;
@@ -202,7 +206,8 @@ export function AntiBanSheet({ item, canWrite, onClose }: Props) {
             <div>
               <Label htmlFor="allow-sunday">Enviar aos domingos</Label>
               <p className="text-xs text-muted-foreground">
-                Desligado por padrão: envio em domingo aumenta o risco de denúncia e bloqueio.
+                Ligado por padrão: quem escreve no domingo espera resposta no domingo. Desligue
+                se você faz prospecção ativa e prefere não incomodar no fim de semana.
               </p>
             </div>
             <Switch
@@ -271,13 +276,24 @@ export function AntiBanSheet({ item, canWrite, onClose }: Props) {
 
           <fieldset className="flex flex-col gap-2">
             <Label>Fuso horário da janela</Label>
-            <Input
-              placeholder={eff.timezone}
+            {/* LISTA, e não texto livre. A API já REJEITA fuso inválido — mas
+                rejeitar é devolver um erro a quem digitou certo na cabeça e
+                errado no teclado (`America/Asunción`, com o acento que um
+                hispanofalante escreve natural). Escolher não erra. */}
+            <select
               value={form.timezone}
               onChange={(e) => set({ timezone: e.target.value })}
               disabled={!canWrite}
               aria-label="Fuso horário IANA"
-            />
+              className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm disabled:opacity-50"
+            >
+              <option value="">Usar o padrão ({eff.timezone})</option>
+              {FUSOS_OFERECIDOS.map((f) => (
+                <option key={f.codigo} value={f.codigo}>
+                  {f.rotulo} — {f.codigo}
+                </option>
+              ))}
+            </select>
             <p className="text-xs text-muted-foreground">
               A janela de envio é avaliada neste fuso (ex.: America/Sao_Paulo).
             </p>

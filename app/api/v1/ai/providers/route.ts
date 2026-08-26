@@ -22,6 +22,7 @@ import {
   decidirBinding,
   EXPLICACAO_DA_ORIGEM,
   PONTOS_DO_AGENTE_PUBLICADO,
+  PONTOS_QUE_HERDAM_DO_AGENTE,
   type LinhaDeBinding,
 } from "@/lib/ai/pontos/resolver";
 import { PAPEIS, PONTOS_DE_IA, PONTO_POR_ID } from "@/lib/ai/pontos/registro";
@@ -107,8 +108,25 @@ export async function GET(): Promise<Response> {
     const decisao = decidirBinding({
       pontoId: ponto.id,
       binding: bindings.get(ponto.id) ?? null,
-      agentePublicado,
-      modeloDeAmbiente: undefined, // o servidor web não enxerga o env do worker
+      // Só os pontos que de fato consomem o agente. Em runtime quem sinaliza a
+      // herança é a PRESENÇA do `llmOverride`, e esta tela não tem esse sinal:
+      // passar o agente para todo ponto faria a coluna "está usando" anunciar o
+      // modelo do agente em ponto que nunca o herda — a mesma tela que mente,
+      // virada do avesso.
+      agentePublicado:
+        PONTOS_DO_AGENTE_PUBLICADO.has(ponto.id) || PONTOS_QUE_HERDAM_DO_AGENTE.has(ponto.id)
+          ? agentePublicado
+          : null,
+      // DÍVIDA, não impossibilidade. A justificativa aqui dizia "o servidor web
+      // não enxerga o env do worker", e isso é falso: `docker-compose.prod.yml`
+      // dá o MESMO `env_file: .env` ao serviço `app` e ao `worker`. O que de
+      // fato só existe do lado do worker são os knobs de NOME DE MODELO
+      // (STAGE_CLASSIFIER_MODEL e irmãos), declarados apenas no schema Zod de
+      // `lib/agent-engine/env.ts` — `process.env` os lê normalmente aqui, como
+      // `lib/instalacao/ambiente.ts` já faz para as chaves.
+      // Enquanto ficar `undefined`, a origem "veio da instalação" nunca aparece
+      // nesta tela, mesmo quando é ela que vale em runtime.
+      modeloDeAmbiente: undefined,
       padraoDaOrganizacao,
     });
     const chave = `${decisao.provider}|${decisao.modelId ?? ""}`;

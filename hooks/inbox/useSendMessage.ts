@@ -12,6 +12,17 @@ interface SendArgs {
   media_storage_path?: string;
   media_size_bytes?: number;
   type?: string;
+  /**
+   * Definição aprovada — o caminho de volta quando a janela de 24h fechou. A
+   * rota já aceitava estes campos; só o front nunca os mandava, então não havia
+   * como disparar um modelo pelo inbox.
+   */
+  template_name?: string;
+  template_language?: string;
+  template_values?: Record<string, string>;
+  /** A mensagem citada — id da NOSSA linha; o handler traduz para o do canal. */
+  reply_to_message_id?: string;
+  metadata?: Record<string, unknown>;
 }
 
 interface MessagesPage {
@@ -26,7 +37,7 @@ export function useSendMessage() {
     mutationFn: async (input: SendArgs) =>
       apiClient.post<{ data: Message }>("/api/v1/messages", input),
     onMutate: async (args) => {
-      if (args.media_storage_path || args.media_url) return {};
+      if (args.media_storage_path || args.media_url || args.type === "contact") return {};
 
       const queryKey = ["messages", args.conversation_id];
       await qc.cancelQueries({ queryKey });
@@ -50,12 +61,18 @@ export function useSendMessage() {
         media_mime: args.media_mime ?? null,
         media_size_bytes: null,
         media_storage_path: null,
+        reply_to_message_id: args.reply_to_message_id ?? null,
         sent_via: "user",
         sent_by_user_id: null,
         sent_at: new Date().toISOString(),
         delivered_at: null,
         read_at: null,
         metadata: { _optimistic: true },
+        // Mensagem que acaba de sair não foi editada nem apagada — mas os
+        // campos precisam existir: sem eles o otimista não é do mesmo tipo do
+        // que volta do servidor, e a bolha passaria a renderizar dois formatos.
+        edited_at: null,
+        revoked_at: null,
         created_at: new Date().toISOString(),
       };
 

@@ -85,7 +85,12 @@ export function ProfileForm({ email, initialFullName, initialAvatarUrl }: Props)
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="pt-BR">Português (BR)</SelectItem>
-                <SelectItem value="en-US">English (US)</SelectItem>
+                {/* Espanhol entrou quando passou a MUDAR alguma coisa. Enquanto
+                    o campo era guardado e ninguém o lia, oferecer um idioma a
+                    mais era prometer o que a tela não cumpre — e o operador
+                    conclui que o sistema está quebrado.
+                    `en-US` saiu pela mesma razão: nunca teve tradução. */}
+                <SelectItem value="es">Español</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -118,8 +123,8 @@ export function ProfileForm({ email, initialFullName, initialAvatarUrl }: Props)
             Upload de arquivo — em breve. Cole uma URL pública.
           </p>
         </div>
-        <div className="flex justify-end">
-          <Button type="submit" disabled={isPending}>
+        <div className="flex sm:justify-end">
+          <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
             {isPending ? "Salvando…" : "Salvar"}
           </Button>
         </div>
