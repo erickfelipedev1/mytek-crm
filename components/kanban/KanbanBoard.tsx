@@ -32,6 +32,8 @@ interface KanbanBoardProps {
    */
   pulses?: Map<string, number>;
   onSelectionChange?: (ids: string[]) => void;
+  /** Lead a abrir já na montagem (deep link `?lead=` — ver o dossiê abaixo). */
+  leadInicial?: string | null;
 }
 
 function groupLeadsByStage(stages: Stage[], leads: Lead[]): Map<string, Lead[]> {
@@ -74,6 +76,7 @@ export function KanbanBoard({
   selectedIds,
   pulses: pulsesProp,
   onSelectionChange,
+  leadInicial,
 }: KanbanBoardProps) {
   const useExternal = stagesProp !== undefined && leadsProp !== undefined;
   const queryResult = useBoard(useExternal ? null : pipelineId);
@@ -114,7 +117,12 @@ export function KanbanBoard({
 
   // O dossiê é do BOARD e não da página: ele precisa do lead inteiro e do nome
   // do estágio, que só existem aqui depois do agrupamento.
-  const [dossieId, setDossieId] = useState<string | null>(null);
+  //
+  // `leadInicial` é o deep link: até aqui o dossiê SÓ abria por clique, então
+  // nenhuma outra tela do produto conseguia apontar para um lead específico —
+  // o histórico de captação tinha o id e nenhum lugar para levá-lo. Uma vez
+  // aberto, o estado local manda (fechar não reabre pela URL).
+  const [dossieId, setDossieId] = useState<string | null>(leadInicial ?? null);
   const [internalSelected, setInternalSelected] = useState<Set<string>>(new Set());
   const selectedLeadIds = useMemo(
     () => (selectedIds ? new Set(selectedIds) : internalSelected),
