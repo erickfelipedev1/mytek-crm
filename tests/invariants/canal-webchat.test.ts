@@ -11,7 +11,7 @@ import {
 } from "./gov-helpers";
 
 /**
- * Canal `webchat` (migration 0149, spec docs/specs/canal-webchat.md).
+ * Canal `webchat` (migration 0176, spec docs/specs/canal-webchat.md).
  *
  * O chat do site usa AS MESMAS `conversations`/`messages` do WhatsApp. Isso é o
  * que faz inbox, fila, roteamento, agentes e RAG servirem o canal novo sem
@@ -76,7 +76,7 @@ beforeAll(() => {
   `);
 });
 
-describe("canal webchat — schema (migration 0149)", () => {
+describe("canal webchat — schema (migration 0176)", () => {
   it("o apêndice do baseline chegou: coluna e índice existem", () => {
     // Controle do INSTRUMENTO antes de qualquer conclusão: sem isto, uma
     // migration que não entrou no baseline faria os testes abaixo passarem por
@@ -145,7 +145,7 @@ describe("canal webchat — uma conversa viva por visitante", () => {
   it("o mesmo visitante NÃO abre uma segunda conversa enquanto a dele está viva", () => {
     // Este é o invariante que a `conversations_unique_per_contact_session` não
     // cobre: ela inclui `channel_session_id`, e com NULL o Postgres trata cada
-    // linha como distinta. Sem o índice parcial da 0149, o visitante ganharia
+    // linha como distinta. Sem o índice parcial da 0176, o visitante ganharia
     // conversa nova A CADA MENSAGEM e o inbox viraria uma pilha de fragmentos.
     expect(() =>
       sql(`
@@ -177,7 +177,7 @@ describe("canal webchat — uma conversa viva por visitante", () => {
 
 describe("canal webchat — fonte de entrada", () => {
   it("`kind` aceita os DOIS valores do vocabulário", () => {
-    // `lead_capture` está aqui por cicatriz: a primeira versão da 0149 recriou
+    // `lead_capture` está aqui por cicatriz: a primeira versão da 0176 recriou
     // este CHECK apenas com ('form','webchat') e derrubou toda linha existente,
     // reprovando dois testes de RLS que nem falam de webchat.
     sql(`

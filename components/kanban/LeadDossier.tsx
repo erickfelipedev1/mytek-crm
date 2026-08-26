@@ -6,6 +6,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { useLeadTimeline } from "@/hooks/leads/useLeadTimeline";
 import { useContact } from "@/hooks/contacts/useContact";
 import type { Lead } from "@/lib/types/leads";
+import { ConversaNoDossie } from "./ConversaNoDossie";
 import { LeadFieldsForm } from "./LeadFieldsForm";
 import { ScoreSlot } from "./ScoreSlot";
 import { LeadTimeline } from "./LeadTimeline";
@@ -142,7 +143,13 @@ export function LeadDossier({
 
         {/* Contato — vive na tabela `contacts` (DIRC: Integrar, não Duplicar),
             então busca à parte por contact_id em vez de esperar o board já
-            trazer telefone/e-mail embutidos no lead. */}
+            trazer telefone/e-mail embutidos no lead.
+
+            Fica ACIMA da conversa de propósito: identidade primeiro (com quem
+            se fala, e por onde), diálogo depois. Os dois blocos nasceram em
+            lados diferentes deste merge — o de contato aqui, o de conversa no
+            upstream — e resolvem perguntas diferentes de quem atende, então
+            convivem em vez de um substituir o outro. */}
         {lead.contact_id && (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border py-3 text-xs text-text-muted">
             {contactQuery.isLoading && <span>Carregando contato…</span>}
@@ -161,6 +168,8 @@ export function LeadDossier({
             )}
           </div>
         )}
+
+        <ConversaNoDossie conversa={lead.conversa} />
 
         {/* ② timeline */}
         <section className="flex-1 py-3">

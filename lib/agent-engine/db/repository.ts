@@ -37,9 +37,24 @@ export type InboxKind =
   | 'reactivation_expired'
   | 'capabilities_missing'
   | 'message_send_stuck'
+  // (migration 0120) A plataforma do canal decide sozinha: reprova um modelo
+  // aprovado, suspende o número, exige KYC. Nada disso chegava ao operador — a
+  // descoberta acontecia no disparo que não saiu.
+  //
+  // Estes DOIS nomes precisam existir aqui, e não só no CHECK do banco:
+  // `vocabulario-banco-x-typescript` exige que os dois vocabulários digam a
+  // mesma coisa, e foi ele que pegou a primeira versão desta mudança — que
+  // tinha o banco atualizado e o tipo não.
+  | 'channel_template_review'
+  | 'channel_number_alert'
   | 'midia_nao_lida'
   | 'promise_unfulfilled'
   | 'contact_proposal_expired'
+  // (migration 0159) O degrau de AVISO do teto de gasto de IA — o que a
+  // organização vê antes de qualquer parada. Existe separado de
+  // `budget_exceeded` porque diz coisa diferente: um relata que algo
+  // ACONTECEU e a IA segue; o outro, que ela parou. Severity 'warn'.
+  | 'budget_warning'
   | 'other';
 
 export interface InboxItemRow {

@@ -1,7 +1,7 @@
 # Spec — Canal `webchat`
 
 > Chat no site do cliente que conversa com o CRM pelo mesmo inbox do WhatsApp.
-> Branch: `feat/canal-webchat`. Migration: **0149**.
+> Branch: `feat/canal-webchat`. Migration: **0176**.
 
 ## Problema
 
@@ -30,7 +30,7 @@ Rejeitado: tabela própria de chat de site. Duplicaria conversa/mensagem/fila e
 exigiria uma segunda tela — violando DIRC (Duplicar) e o Living System (a
 feature teria que reconstruir porta, timeline e log próprios).
 
-## Schema (migration 0149 + apêndice no baseline)
+## Schema (migration 0176 + apêndice no baseline)
 
 | Mudança | Porquê |
 |---|---|

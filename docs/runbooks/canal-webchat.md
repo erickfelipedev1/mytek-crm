@@ -4,7 +4,7 @@
 > diferentes, e **a ordem importa**.
 >
 > Spec: [`docs/specs/canal-webchat.md`](../specs/canal-webchat.md) ·
-> Migration: `0149` · Deploy geral: [`deploy.md`](deploy.md)
+> Migration: `0176` · Deploy geral: [`deploy.md`](deploy.md)
 
 ## O que muda
 
@@ -36,7 +36,7 @@ gh pr checks 7 --repo erickfelipedev1/mytek-crm
 
 O que interessa mais é o **`invariants`**: é ele que aplica o `baseline.sql`
 num Postgres cru (modo install *e* update) e roda os invariantes do canal. Verde
-ali é a prova de que a 0149 entra sem derrubar o banco de um clone.
+ali é a prova de que a 0176 entra sem derrubar o banco de um clone.
 
 ---
 
@@ -52,7 +52,7 @@ ali é a prova de que a 0149 entra sem derrubar o banco de um clone.
 > ```
 >
 > Mergear e rodar o `update.sh` faria ele responder "já está na versão mais
-> recente" e sair — com a 0149 **fora** do banco. O app não quebraria hoje, e é
+> recente" e sair — com a 0176 **fora** do banco. O app não quebraria hoje, e é
 > isso que torna a armadilha ruim: você só descobriria quando o primeiro
 > visitante tentasse abrir o chat.
 >
@@ -89,7 +89,7 @@ bash hostgator-setup-kit/update.sh
 ```
 
 Ele faz, nesta ordem: backup do banco → checkout da tag → **re-aplica o
-`baseline.sql`** (é assim que a 0149 chega ao banco) → puxa a imagem → reinicia →
+`baseline.sql`** (é assim que a 0176 chega ao banco) → puxa a imagem → reinicia →
 confere a saúde.
 
 Re-aplicar o baseline gera muitos avisos `já existe` e `multiple primary keys`:
@@ -99,7 +99,7 @@ propósito, e o script filtra esse ruído.
 > Se preferir o deploy à mão, os **dois** `-f` são obrigatórios — ver
 > `deploy.md` §1. Omitir o `docker-compose.traefik.yml` faz o domínio inteiro
 > responder 404 com o contêiner `healthy`. Mas atenção: o caminho manual **não
-> aplica o `baseline.sql`**, então a 0149 não chegaria ao banco.
+> aplica o `baseline.sql`**, então a 0176 não chegaria ao banco.
 
 **1.3** Verifique antes de seguir:
 
@@ -165,7 +165,7 @@ Se as variáveis foram criadas **depois** do último build, force um novo
 
 ## Fase 4 — provar que funciona (não é formalidade)
 
-O caminho feliz **nunca foi executado ponta a ponta** — dependia da 0149 estar
+O caminho feliz **nunca foi executado ponta a ponta** — dependia da 0176 estar
 num banco de verdade. Esta fase é o primeiro teste real, não uma conferência.
 
 1. Abra `https://mytek.com.br` e confirme que a bolha azul aparece no canto.
@@ -192,7 +192,7 @@ em reverter código.
 **Tirar o widget do ar:** limpe `NEXT_PUBLIC_WEBCHAT_TOKEN` no Cloudflare e
 refaça o build. Sem token, o widget não renderiza (é o default seguro).
 
-**A migration não precisa ser revertida.** A 0149 só *acrescenta*: um valor no
+**A migration não precisa ser revertida.** A 0176 só *acrescenta*: um valor no
 CHECK do canal, colunas novas, e um afrouxamento de `NOT NULL` que continua
 cobrado para WhatsApp por constraint própria. Nada que existia antes depende dela.
 Reverter o código sem reverter o banco é seguro.

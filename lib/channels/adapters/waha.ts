@@ -5,11 +5,35 @@
  *
  * Nenhuma regra de negócio mora neste arquivo (ver `ChannelAdapter` em ../types).
  */
+import { wahaContactPayload } from "@/lib/waha/contact-card";
+import { fetchWahaMedia } from "@/lib/messaging/media/waha-source";
 import { getWahaClient } from "@/lib/waha/client";
 import { wahaSendPlanFor } from "@/lib/waha/media-send";
+import { resolveWhatsappIdForContactCard } from "@/lib/waha/resolve-contact-whatsapp-id";
 import { bareWaMessageId, parseWahaMessageId } from "@/lib/waha/message-id";
 import { resolveWahaChatId } from "@/lib/waha/send";
-import type { ChannelAdapter, OutboundEnvelope, RecipientInput } from "../types";
+import type { FetchedMedia } from "@/lib/messaging/media/types";
+import { DETALHE_CREDENCIAL_RECUSADA } from "../health";
+import type { ChannelAdapter, ChannelHealth, OutboundEnvelope, RecipientInput } from "../types";
+
+/**
+ * O HTTP que o WAHA devolveu, lido do PREFIXO da mensagem de erro.
+ *
+ * `lib/waha/client.ts` lança `waha_<status>` ou `waha_<operação>_<status>`, às
+ * vezes seguido do corpo da resposta. Procurar `"404"` com `includes` — como
+ * este arquivo fazia — varreria o CORPO junto: um `waha_stop_500: {"detail":
+ * "upstream 404"}` viraria "sessão parada", dando um transporte quebrado por
+ * explicado.
+ *
+ * Medido, e sem inflar: pelo caminho do `checkHealth` isso NÃO era alcançável
+ * hoje — quem ele chama é `getSessionQr`, e essa lança `waha_<status>` seco,
+ * sem corpo. A troca é robustez, não o conserto de um defeito observado; o que
+ * conserta o defeito observado é o ramo 401/403 abaixo.
+ */
+export function statusHttpDoErroWaha(msg: string): number | null {
+  const m = /^waha_(?:[a-z]+_)?(\d{3})\b/.exec(msg);
+  return m ? Number(m[1]) : null;
+}
 
 export const wahaAdapter: ChannelAdapter = {
   provider: "waha",
@@ -62,6 +86,88 @@ export const wahaAdapter: ChannelAdapter = {
     return client.getProfilePictureUrl(input.sessionRef, input.recipient);
   },
 
+  /**
+   * `lid:123…` → `+5959…`, quando a tabela de tradução do canal já souber.
+   *
+   * Só para identidade OPACA: `phone:` já traz o número, e perguntar seria
+   * gastar uma chamada para receber de volta o que já se tem.
+   */
+  async resolvePhoneForIdentity(input: {
+    sessionRef: string;
+    identity: string;
+  }): Promise<string | null> {
+    if (!input.identity.startsWith("lid:")) return null;
+    const client = getWahaClient();
+    if (!client) return null;
+    return client.resolvePhoneForLid(input.sessionRef, input.identity.slice("lid:".length));
+  },
+
+  /**
+   * Pergunta ao transporte se a conexão está de pé.
+   *
+   * Três desfechos, e a diferença entre eles é o que o operador vai FAZER:
+   *
+   *   - respondeu com estado → é a verdade do momento;
+   *   - 404 → a sessão não existe mais lá dentro. Não é erro de rede: é a
+   *     resposta, e ela quer dizer parada. Sem este ramo o caso mais comum de
+   *     desconexão (o transporte esqueceu a sessão) viraria "não deu para
+   *     perguntar" e não alertaria ninguém;
+   *   - qualquer outro erro → NÃO sabemos. Devolver um estado aqui seria
+   *     inventar: uma oscilação de rede viraria "canal caído" e o operador
+   *     aprenderia a ignorar o aviso.
+   */
+  async checkHealth(input: { sessionRef: string }): Promise<ChannelHealth> {
+    const client = getWahaClient();
+    if (!client) return { reachable: false, status: null, detail: "transporte_nao_configurado" };
+    try {
+      const r = await client.getSessionQr(input.sessionRef);
+      return { reachable: true, status: r.status ?? null, detail: null };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "erro_desconhecido";
+      const http = statusHttpDoErroWaha(msg);
+
+      // Sessão não existe no transporte → parada. É o único desfecho em que
+      // dá para AFIRMAR o estado da sessão a partir de um erro.
+      if (http === 404) return { reachable: true, status: "STOPPED", detail: null };
+
+      // A chave foi recusada. Não é o estado da sessão que está em jogo — é o
+      // acesso ao transporte inteiro, e enquanto durar NENHUMA conexão
+      // funciona. Continua `reachable: false` porque de fato não se sabe o
+      // estado da sessão; o que muda é o `detail`, que a Central lê para dizer
+      // ao operador que escanear o QR não vai resolver.
+      //
+      // Sem isto, um 401 caía no ramo genérico e virava "Não foi possível
+      // verificar a conexão" — um aviso `warn` que descreve oscilação de rede.
+      // Numa VPS real isso durou TRÊS DIAS: a chave do WAHA tinha sido trocada
+      // por uma segunda cópia do repo, nada funcionava, e a única pista visível
+      // sugeria um soluço passageiro.
+      if (http === 401 || http === 403) {
+        return { reachable: false, status: null, detail: DETALHE_CREDENCIAL_RECUSADA };
+      }
+
+      return { reachable: false, status: null, detail: msg.slice(0, 200) };
+    }
+  },
+
+  /**
+   * Baixa o anexo que o cliente mandou.
+   *
+   * Delega em `fetchWahaMedia`, que o worker de persistência chamava FIXO — era
+   * essa linha que fazia a mídia de qualquer outro canal virar linha sem bytes.
+   * O comportamento aqui é idêntico ao de antes: mesma função, mesmos
+   * argumentos. O que mudou é quem a escolhe.
+   */
+  async fetchInboundMedia(input: {
+    sessionRef: string;
+    url: string;
+    hintMime?: string | null;
+  }): Promise<FetchedMedia> {
+    // Devolve o objeto INTEIRO, sem remontar campo a campo: `FetchedMedia` é o
+    // mesmo tipo dos dois lados, e reconstruí-lo faria a próxima adição de
+    // campo sumir em silêncio aqui no meio.
+    return fetchWahaMedia(input.url, input.hintMime ?? null);
+  },
+
   async send(envelope: OutboundEnvelope): Promise<{ externalId: string | null }> {
     const client = getWahaClient();
     // Sem env de WAHA o comportamento atual é NOOP, não erro: a UI mostra o
@@ -69,13 +175,40 @@ export const wahaAdapter: ChannelAdapter = {
     // comportamento visível — proibido nas Fases 0–2.
     if (!client) return { externalId: null };
 
-    const res = envelope.media
-      ? await client.sendMedia(
-          envelope.sessionRef,
-          envelope.to,
-          wahaSendPlanFor(envelope.kind, envelope.media),
-        )
-      : await client.sendMessage(envelope.sessionRef, envelope.to, envelope.body ?? "");
+    // A estrutura de três caminhos é do upstream (o cartão de contato entrou
+    // depois da citação). O que se enxerta aqui é o `replyToExternalId` no
+    // caminho de TEXTO — os outros dois não citam: o WAHA aceita `reply_to` só
+    // no `sendText`, e mandá-lo nos outros seria pedir para a API ignorar em
+    // silêncio, que é como se perde uma feature sem ninguém notar.
+    let res: unknown;
+    if (envelope.kind === "contact" && envelope.contact) {
+      const resolvedId = await resolveWhatsappIdForContactCard(
+        client,
+        envelope.sessionRef,
+        envelope.contact.phoneNumber,
+      );
+      const contact = wahaContactPayload(
+        envelope.contact.fullName,
+        envelope.contact.phoneNumber,
+        resolvedId ?? envelope.contact.whatsappId,
+      );
+      res = await client.sendContactVcard(envelope.sessionRef, envelope.to, [contact]);
+    } else if (envelope.media) {
+      res = await client.sendMedia(
+        envelope.sessionRef,
+        envelope.to,
+        wahaSendPlanFor(envelope.kind, envelope.media),
+      );
+    } else {
+      res = await client.sendMessage(
+        envelope.sessionRef,
+        envelope.to,
+        envelope.body ?? "",
+        // A citação é enfeite da conversa, nunca condição de envio: quando não
+        // há, o envio segue igual. Ver `OutboundEnvelope.replyToExternalId`.
+        envelope.replyToExternalId,
+      );
+    }
 
     return { externalId: parseWahaMessageId(res) };
   },

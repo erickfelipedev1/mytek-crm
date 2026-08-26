@@ -40,10 +40,10 @@ export interface DepsDaOperacao {
  * `vocabulario-banco-x-typescript` compara com o CHECK de `webhook_sources.kind`.
  *
  * `lead_capture`: um POST vira contato+lead e acabou (formulário de site).
- * `webchat`: abre conversa e troca mensagens (migration 0149).
+ * `webchat`: abre conversa e troca mensagens (migration 0176).
  *
  * A lista existe em TypeScript porque os dois lados já divergiram uma vez: a
- * 0149 nasceu inventando um terceiro nome para `lead_capture` e recriou o CHECK
+ * 0176 nasceu inventando um terceiro nome para `lead_capture` e recriou o CHECK
  * sem ele, derrubando toda linha existente. Vocabulário sem par declarado é
  * vocabulário que só avisa da divergência com um 23514 em produção.
  */

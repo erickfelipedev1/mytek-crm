@@ -74,11 +74,15 @@ export function PipelinePageClient({
       data-refetch-divergencias={seguranca.divergencias}
       data-refetch-em={seguranca.ultimaVerificacao ?? ""}
     >
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">
+      {/* `flex-col` no mobile: nome de funil comprido (é texto livre, sem
+          limite curto) + botão na mesma linha sem quebra empurrava o botão pra
+          fora da viewport em telas estreitas. De `sm:` pra cima volta a ser
+          uma linha só, como sempre foi. */}
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight">
           {data?.pipeline.name ?? initialName}
         </h1>
-        <Button onClick={() => setNewOpen(true)} disabled={!data}>
+        <Button onClick={() => setNewOpen(true)} disabled={!data} className="shrink-0">
           <Plus size={16} className="mr-2" /> Novo Lead
         </Button>
       </header>
@@ -93,7 +97,7 @@ export function PipelinePageClient({
       <FilterBar filters={filters} onChange={setFilters} leads={data?.leads ?? []} />
       {error ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm">
-          Erro ao carregar pipeline:{" "}
+          Não consegui carregar este funil:{" "}
           {formatError(error)}
         </div>
       ) : isLoading || !data ? (
@@ -109,6 +113,7 @@ export function PipelinePageClient({
           pipeline={data.pipeline}
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
+          leadInicial={searchParams.get("lead")}
         />
       )}
       <BulkActionBar

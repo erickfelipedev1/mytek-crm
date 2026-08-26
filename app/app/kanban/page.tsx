@@ -47,7 +47,19 @@ export default async function KanbanPickerPage() {
     <div className="flex h-full flex-col gap-4 p-6">
       <header className="flex items-center gap-3">
         <Kanban size={28} className="text-muted-foreground" weight="duotone" />
-        <h1 className="text-2xl font-semibold tracking-tight">Kanban</h1>
+        {/* Era "Pipelines" — nome de quem construiu o sistema, não de quem
+            vende. O comentário anterior aqui listava o preço de trocá-lo
+            (`rbac-roles.spec.ts` e `invite-lifecycle.spec.ts`) e dizia que
+            uniformizar era decisão do dono do produto. Ela foi tomada, e o preço
+            era maior do que o comentário contava: são QUATRO assertions em TRÊS
+            specs, e `pipelines-gestao.spec.ts` — a spec da própria feature que
+            gerou o comentário — é uma delas. Todas atualizadas junto.
+
+            Este fork chegou a divergir para "Kanban" e voltou no merge de
+            sincronização: o upstream renomeou TAMBÉM o link da barra lateral
+            (`lib/navigation/registry.ts`), e manter só o `h1` diferente deixava
+            o usuário clicando em "Funis" para chegar numa página "Kanban". */}
+        <h1 className="text-2xl font-semibold tracking-tight">Funis</h1>
       </header>
 
       <FunisClient funis={funis} podeGerenciar={podeGerenciar} />

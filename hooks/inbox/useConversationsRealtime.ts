@@ -27,12 +27,53 @@ export interface ContactSummary {
   force_human?: boolean | null;
 }
 
+/**
+ * O número POR ONDE a conversa entrou.
+ *
+ * Não é o número do cliente — é o da empresa. Com um canal só a distinção não
+ * existe; com dois, saber por qual linha a pessoa escreveu é o que decide o tom
+ * da resposta e qual número ela vai ver respondendo.
+ */
+export interface ChannelSummary {
+  phone_number: string | null;
+  display_name: string | null;
+  /**
+   * Quem impõe a regra deste número. A tela NÃO interpreta este valor — ela o
+   * entrega a `estadoDaJanela` (lib/channels), que decide se há relógio a
+   * mostrar. Ler o campo não é nomear o provider; o `if (provider === ...)` é
+   * que a doutrina proíbe, e ele mora atrás do seam.
+   */
+  provider: string | null;
+}
+
 export type ConversationWithContact = Conversation & {
   contacts?: ContactSummary | null;
+  channel_sessions?: ChannelSummary | null;
+  /**
+   * O nome de quem atende, resolvido no servidor.
+   *
+   * Opcional e nulável, e as duas coisas significam algo diferente: ausente é
+   * resposta em cache de antes deste campo existir; `null` é um estado DECLARADO
+   * — self-host sem service role, ou lookup que falhou (ver
+   * `lib/users/nome-do-atendente.ts`). Nenhum dos dois quer dizer "sem
+   * responsável": o dono é o `assigned_to_user_id`, o nome é a cortesia.
+   */
+  assigned_to_user_name?: string | null;
 };
 
+/** O vocabulário de LEITURA (7), que inclui os dois estados que só o motor escreve. */
+export type StatusDeConversa =
+  | "open"
+  | "pending"
+  | "resolved"
+  | "claimed"
+  | "ai_handling"
+  | "closed"
+  | "archived";
+
 export interface ConversationsFilters {
-  status?: "open" | "claimed" | "ai_handling" | "closed" | "archived";
+  /** Um status ou vários — a aba Fila precisa de dois (open + pending). */
+  status?: StatusDeConversa | readonly StatusDeConversa[];
   /** Esconde fechadas/arquivadas — ver `exclude_finished` no schema da rota. */
   exclude_finished?: boolean;
   assigned_to?: "me" | "unassigned" | string;
@@ -58,7 +99,12 @@ export function useConversationsRealtime(
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) => {
       const qs = new URLSearchParams();
-      if (filters.status) qs.set("status", filters.status);
+      // Lista vira `open,pending`; valor único continua saindo como antes.
+      if (filters.status) {
+        const lista: readonly StatusDeConversa[] =
+          typeof filters.status === "string" ? [filters.status] : filters.status;
+        qs.set("status", lista.join(","));
+      }
       if (filters.exclude_finished) qs.set("exclude_finished", "true");
       if (filters.assigned_to) qs.set("assigned_to", filters.assigned_to);
       if (filters.search) qs.set("search", filters.search);
@@ -75,6 +121,10 @@ export function useConversationsRealtime(
     },
     getNextPageParam: (last) =>
       last.meta?.has_more && last.meta.cursor ? last.meta.cursor : undefined,
+    // Mesma razão do hilo de mensagens: o inbox é a tela em que a informação
+    // chega de fora enquanto ninguém olha, e voltar para a aba é quando a
+    // defasagem aparece. Segunda rede — a primeira é o Realtime.
+    refetchOnWindowFocus: true,
   });
 
   const onChange = useCallback(() => {

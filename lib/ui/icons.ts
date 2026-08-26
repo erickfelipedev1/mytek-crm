@@ -32,12 +32,16 @@ export {
   Gauge,
   WifiSlash,
   Clock,
+  // marca da instalação (o revendedor troca nome e cor do produto)
+  Palette,
   // health dashboard
   WifiHigh,
   Brain,
   ArrowsClockwise,
   Dot,
   // actions
+  ArrowBendUpLeft,
+  List,
   Bell,
   PaperPlaneTilt,
   Smiley,
@@ -54,6 +58,10 @@ export {
   Copy,
   DownloadSimple,
   Archive,
+  // origem de uma captação de formulário (página, IP, link para o lead)
+  Globe,
+  ArrowSquareOut,
+  Tray,
   // feedback
   CheckCircle,
   Warning,
@@ -112,4 +120,6 @@ export {
   Key,
   UserCircle,
   ClockCounterClockwise,
+  // inbox no celular: voltar para a lista e abrir a ficha do contato
+  IdentificationCard,
 } from "@phosphor-icons/react/dist/ssr";

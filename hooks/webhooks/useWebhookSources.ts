@@ -11,7 +11,7 @@ export interface WebhookSourceRow {
   name: string;
   path_token: string;
   is_active: boolean;
-  /** `lead_capture` (formulário) ou `webchat` (chat de site) — migration 0149. */
+  /** `lead_capture` (formulário) ou `webchat` (chat de site) — migration 0176. */
   kind: string;
   /** Origens autorizadas a abrir chat. Vazio recusa todas. Só usado em `webchat`. */
   allowed_origins: string[];
