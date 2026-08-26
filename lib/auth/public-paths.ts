@@ -14,6 +14,18 @@ export const PUBLIC_PATHS: RegExp[] = [
   /^\/503$/,
   /^\/api\/v1\/health$/,
   /^\/api\/v1\/webhooks\//,
+  // Canal webchat (migration 0176): o navegador do VISITANTE chama estas rotas,
+  // e visitante não tem sessão do CRM — é o mesmo caso do webhook de captação
+  // logo acima. Quem autoriza é a lista de origens da fonte (`allowed_origins`)
+  // mais o token de sessão HMAC que a própria rota emite e confere.
+  //
+  // Sem esta linha o `proxy.ts` responde 401 ANTES de a rota rodar, e o sintoma
+  // não aponta para cá: o widget do site diz "não consegui abrir a conversa" e o
+  // CORS nem chega a ser avaliado. Medido em produção antes de existir — as três
+  // origens (as duas legítimas e uma de teste) recebiam 401 idêntico, o que
+  // também escondia o gate de origem: um 403 seletivo vira 401 uniforme, e a
+  // diferença entre "origem recusada" e "rota inalcançável" some.
+  /^\/api\/v1\/webchat\//,
   /^\/api\/v1\/cron\//,
   // Heartbeat do agente do host (bearer INTERNAL_SECRET/INTERNAL_CRON_SECRET,
   // checado dentro da própria rota) — sem cookie de sessão, igual /cron/.
