@@ -29,7 +29,7 @@
  * silenciosa — se você precisar acrescentar uma, escreva o porquê junto.
  */
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 
 // O padrão vive em módulo próprio para poder ser testado sem executar o lint —
 // ver a justificativa das duas fronteiras (issue #118) lá.
@@ -187,7 +187,12 @@ const DEBT = new Set(KNOWN_DEBT.flatMap((g) => g.files));
 
 function walk(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-    const p = join(dir, e.name);
+    // Separador normalizado para "/" na origem: `join` devolve "\" no Windows, e
+    // TODA comparação daqui pra frente (ALLOWED, DEBT, `offenders.includes`) é
+    // string exata contra caminhos escritos com "/". Sem isto o lint reprova a
+    // dívida inteira como nova E declara a lista inteira como stale — só no
+    // Windows, então o CI (Linux) passa verde e o bug fica invisível lá.
+    const p = join(dir, e.name).split(sep).join("/");
     if (e.isDirectory()) return e.name === "node_modules" ? [] : walk(p);
     return /\.tsx?$/.test(e.name) ? [p] : [];
   });
