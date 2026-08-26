@@ -19,7 +19,14 @@ import {
   type ChannelSessionRef,
 } from "@/lib/channels";
 import { ARCHIVED_AT, queryTolerantToMissingArchived } from "@/lib/channels/archived";
+import { conferirDefinicao } from "@/lib/channels/conferir-definicao";
 import { isMediaPathOwnedBy } from "@/lib/messaging/media/upload-validation";
+import {
+  buildVcard,
+  normalizePhoneForDisplay,
+  parseDialablePhone,
+  phoneToWhatsappId,
+} from "@/lib/messaging/contact-card";
 import type { ListMessagesQuery, SendMessageInput } from "@/lib/schemas";
 import { sendTemplateForSession } from "@/lib/channels/meta/send-template-for-session";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -104,7 +111,7 @@ async function removerEcoDoProprioEnvio(
 }
 
 const MSG_COLS =
-  "id, organization_id, conversation_id, channel_session_id, contact_id, external_id, type, direction, status, ack, error_code, error_message, body, media_url, media_mime, media_size_bytes, media_storage_path, sent_via, sent_by_user_id, sent_at, delivered_at, read_at, metadata, created_at";
+  "id, organization_id, conversation_id, channel_session_id, contact_id, external_id, type, direction, status, ack, error_code, error_message, body, media_url, media_mime, media_size_bytes, media_storage_path, sent_via, sent_by_user_id, sent_at, delivered_at, read_at, metadata, edited_at, revoked_at, reply_to_message_id, created_at";
 
 function actorAuditPayload(actor: Actor): {
   actorUserId: string | null;
@@ -229,6 +236,28 @@ function previewFrom(input: {
   return "";
 }
 
+/**
+ * Atendente respondeu manualmente → IA fica quieta nesta conversa por uma janela curta,
+ * renovada a cada mensagem humana (sliding window). Sem isto, a IA só "parecia" quieta
+ * por coincidência de timing (nenhum turno novo disparado) e voltava a responder junto
+ * com o humano assim que o cliente mandava a próxima mensagem — `isLeadInHandoff`
+ * (lib/agent-engine/agent/human-handoff.ts) só olhava `force_human`/`bot_silenced_until`,
+ * e nenhum envio manual tocava nenhum dos dois.
+ */
+const HUMAN_REPLY_SILENCE_MS = 5 * 60 * 1000;
+
+/**
+ * Postgres 'infinity' (handoff permanente — regex/tool/orquestrador) chega do PostgREST
+ * como o literal texto "infinity", que `new Date(...)` não parseia. Nunca encurtar isso
+ * para uma janela de 5min: se já está travado pra sempre, este helper não mexe.
+ */
+function extendBotSilence(current: string | null, now: string): string | undefined {
+  if (current === "infinity") return undefined;
+  const candidate = new Date(new Date(now).getTime() + HUMAN_REPLY_SILENCE_MS);
+  if (current && new Date(current) >= candidate) return undefined;
+  return candidate.toISOString();
+}
+
 export async function sendMessageHandler(
   supabase: SB,
   ctx: HandlerCtx,
@@ -240,7 +269,7 @@ export async function sendMessageHandler(
   // envio com 42703. Sem a coluna, nada está arquivado — e a consulta sem ela é a
   // consulta certa (ver lib/channels/archived).
   const convSelect = (comArchived: boolean) =>
-    `id, organization_id, contact_id, channel_session_id, is_group, group_chat_id, provider_conversation_id, contacts:contact_id(phone_number, wa_identity, wa_lid, is_blocked), channel_sessions:channel_session_id(${CHANNEL_SESSION_REF_COLUMNS}, status${comArchived ? `, ${ARCHIVED_AT}` : ""})`;
+    `id, organization_id, contact_id, channel_session_id, is_group, group_chat_id, bot_silenced_until, provider_conversation_id, contacts:contact_id(phone_number, wa_identity, wa_lid, is_blocked), channel_sessions:channel_session_id(${CHANNEL_SESSION_REF_COLUMNS}, status${comArchived ? `, ${ARCHIVED_AT}` : ""})`;
   const { data: conv, error: convErr } = await queryTolerantToMissingArchived(
     () => supabase.from("conversations").select(convSelect(true)).eq("id", input.conversation_id).maybeSingle(),
     () => supabase.from("conversations").select(convSelect(false)).eq("id", input.conversation_id).maybeSingle(),
@@ -260,6 +289,7 @@ export async function sendMessageHandler(
     channel_session_id: string;
     is_group: boolean;
     group_chat_id: string | null;
+    bot_silenced_until: string | null;
     /** Thread do provider, quando ele endereça por thread própria (migration 0132). */
     provider_conversation_id: string | null;
     contacts: {
@@ -292,9 +322,131 @@ export async function sendMessageHandler(
     );
   }
 
+  let outboundBody = input.body ?? null;
+  let outboundMetadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
+
+  if (input.type === "contact") {
+    const sharedId = input.metadata?.shared_contact_id;
+    const inline = input.metadata?.shared_contact;
+
+    if (typeof sharedId === "string" && sharedId.length > 0) {
+      const { data: shared, error: sharedErr } = await supabase
+        .from("contacts")
+        .select("id, display_name, name, phone_number, is_anonymized, is_blocked")
+        .eq("id", sharedId)
+        .eq("organization_id", ctx.organization_id)
+        .maybeSingle();
+      if (sharedErr) {
+        throw new ApiError(500, "internal_error", undefined, ctx.requestId, sharedErr.message);
+      }
+      if (!shared) {
+        throw new ApiError(404, "not_found", undefined, ctx.requestId, "Contato não encontrado.");
+      }
+      const row = shared as {
+        id: string;
+        display_name: string | null;
+        name: string | null;
+        phone_number: string | null;
+        is_anonymized: boolean;
+        is_blocked: boolean;
+      };
+      if (row.is_anonymized) {
+        throw new ApiError(
+          422,
+          "contact_anonymized",
+          undefined,
+          ctx.requestId,
+          "Contato anonimizado não pode ser compartilhado.",
+        );
+      }
+      if (!row.phone_number) {
+        throw new ApiError(
+          422,
+          "missing_phone_number",
+          undefined,
+          ctx.requestId,
+          "Contato sem telefone para envio como cartão.",
+        );
+      }
+      const displayName = row.display_name ?? row.name ?? row.phone_number;
+      outboundBody = displayName;
+      outboundMetadata = {
+        ...outboundMetadata,
+        shared_contact: {
+          contact_id: row.id,
+          name: displayName,
+          phone_number: row.phone_number,
+        },
+      };
+    } else if (inline && typeof inline === "object" && !Array.isArray(inline)) {
+      const o = inline as Record<string, unknown>;
+      const rawPhone = typeof o.phone_number === "string" ? o.phone_number : "";
+      const phone = parseDialablePhone(rawPhone);
+      if (!phone) {
+        throw new ApiError(
+          422,
+          "invalid_payload",
+          undefined,
+          ctx.requestId,
+          "Telefone inválido para envio como cartão.",
+        );
+      }
+      const nameRaw = typeof o.name === "string" ? o.name.trim() : "";
+      const displayName = nameRaw || phone;
+      outboundBody = displayName;
+      outboundMetadata = {
+        ...outboundMetadata,
+        shared_contact: { name: displayName, phone_number: phone },
+      };
+    } else {
+      throw new ApiError(
+        422,
+        "invalid_payload",
+        undefined,
+        ctx.requestId,
+        "Informe metadata.shared_contact_id ou metadata.shared_contact com telefone.",
+      );
+    }
+  }
+
   const now = new Date().toISOString();
+  // ─── A CITAÇÃO, e a checagem que ela obriga ────────────────────────────────
+  //
+  // O id da citada vem do CLIENTE. Sem confirmar que ela é da MESMA conversa,
+  // alguém poderia citar uma mensagem de outra conversa — e a citação é
+  // renderizada com o texto, então isso vaza conteúdo de um atendimento para
+  // dentro de outro. O filtro de conversa é o que fecha isso; o de organização
+  // vem de brinde por `conversation_id` já ser desta org.
+  //
+  // Recusar em silêncio (citar nada) seria pior que recusar alto: quem clicou
+  // "responder" veria a mensagem sair sem o fio e não saberia por quê.
+  let citada: { id: string; external_id: string | null } | null = null;
+  if (input.reply_to_message_id) {
+    const { data: alvo } = await supabase
+      .from("messages")
+      .select("id, external_id")
+      .eq("id", input.reply_to_message_id)
+      .eq("organization_id", ctx.organization_id)
+      .eq("conversation_id", c.id)
+      .maybeSingle();
+
+    if (!alvo) {
+      throw new ApiError(
+        422,
+        "validation_error",
+        undefined,
+        ctx.requestId,
+        "A mensagem citada não é desta conversa.",
+      );
+    }
+    citada = alvo as { id: string; external_id: string | null };
+  }
+
   const insertRow = {
     organization_id: c.organization_id,
+    // Guardado mesmo quando o canal não sabe citar: o fio existe no NOSSO
+    // histórico de qualquer jeito, e é o que a tela desenha.
+    reply_to_message_id: citada?.id ?? null,
     conversation_id: c.id,
     channel_session_id: c.channel_session_id,
     contact_id: c.contact_id,
@@ -413,13 +565,50 @@ export async function sendMessageHandler(
         // texto/mídia) porque o payload da plataforma é outro — e porque o envio
         // exige checar o contrato ANTES de sair (bind vigente, valores completos),
         // coisa que só faz sentido para template.
-        externalId = await sendTemplateForSession(supabase, {
+        //
+        // Mas quem SABE falar template é o adapter, quando sabe. Antes disto a
+        // linha de baixo era o único caminho, e ela lê `META_PHONE_NUMBER_ID` e
+        // `META_SYSTEM_USER_TOKEN` do ambiente: template de QUALQUER canal saía
+        // pelo número da Meta, com o token da Meta. Para o canal intermediado
+        // isso não é falha de envio — é a mensagem saindo pelo número ERRADO
+        // para o cliente certo, e ninguém percebe porque ela sai.
+        // ─── Pré-voo ANTES de escolher transporte ──────────────────────────
+        //
+        // Vale para os dois caminhos, e é por isso que está aqui e não dentro
+        // de um deles: a definição aprovada é contrato da plataforma, não
+        // característica do transporte. O caminho de baixo já conferia; o
+        // adapter postava direto, e um parâmetro a mais virava `400` cru em vez
+        // de "falta o valor {{2}}".
+        await conferirDefinicao(supabase, {
           organizationId: ctx.organization_id,
-          to: chatId,
+          // A conexão dona da definição: dois números têm modelos diferentes, e
+          // conferir a do número errado aprovaria um envio que a plataforma
+          // recusa. `null` só em base anterior à 0144.
+          channelSessionId: c.channel_session_id ?? null,
           name: input.template_name ?? "",
           language: input.template_language ?? "",
           values: input.template_values ?? {},
         });
+
+        externalId = adapter.sendTemplate
+          ? (
+              await adapter.sendTemplate({
+                organizationId: ctx.organization_id,
+                sessionRef: resolveSessionRef(c.channel_sessions),
+                to: chatId,
+                providerConversationId: c.provider_conversation_id,
+                name: input.template_name ?? "",
+                language: input.template_language ?? "",
+                values: input.template_values ?? {},
+              })
+            ).externalId
+          : await sendTemplateForSession(supabase, {
+              organizationId: ctx.organization_id,
+              to: chatId,
+              name: input.template_name ?? "",
+              language: input.template_language ?? "",
+              values: input.template_values ?? {},
+            });
       } else if (input.media_storage_path) {
         // Storage-first: signed URL curta só pro canal baixar (nunca base64).
         const admin = createAdminClient();
@@ -431,6 +620,7 @@ export async function sendMessageHandler(
         }
         const filename = input.media_storage_path.split("/").pop() ?? undefined;
         ({ externalId } = await adapter.send({
+          organizationId: ctx.organization_id,
           sessionRef: resolveSessionRef(c.channel_sessions),
           to: chatId,
           providerConversationId: c.provider_conversation_id,
@@ -441,14 +631,47 @@ export async function sendMessageHandler(
             filename,
             caption: input.body ?? null,
           },
+          // O id que a PLATAFORMA conhece, lido da linha citada agora — não uma
+          // cópia guardada no envio, que poderia divergir da linha.
+          replyToExternalId: citada?.external_id ?? null,
+        }));
+      } else if (input.type === "contact") {
+        const sc = outboundMetadata.shared_contact as
+          | { name: string; phone_number: string }
+          | undefined;
+        if (!sc?.phone_number) {
+          throw new Error("contact_payload_missing");
+        }
+        // O envelope leva o cartão em formato AGNÓSTICO (vCard é formato, não
+        // provider). Quem traduz para o payload do transporte é o adapter — o
+        // de QR inclusive REESCREVE `whatsappId` e `vcard` depois de resolver o
+        // wa_id real, então montá-los aqui com o nome do provider seria, além
+        // de proibido pelo invariante 1, trabalho jogado fora.
+        const telefone = normalizePhoneForDisplay(sc.phone_number);
+        const nome = sc.name?.trim() || telefone;
+        ({ externalId } = await adapter.send({
+          organizationId: ctx.organization_id,
+          sessionRef: resolveSessionRef(c.channel_sessions),
+          to: chatId,
+          providerConversationId: c.provider_conversation_id,
+          kind: "contact",
+          body: outboundBody ?? nome,
+          contact: {
+            fullName: nome,
+            phoneNumber: telefone,
+            whatsappId: phoneToWhatsappId(telefone),
+            vcard: buildVcard(nome, telefone),
+          },
         }));
       } else {
         ({ externalId } = await adapter.send({
+          organizationId: ctx.organization_id,
           sessionRef: resolveSessionRef(c.channel_sessions),
           to: chatId,
           providerConversationId: c.provider_conversation_id,
           kind: input.type,
           body: input.body ?? "",
+          replyToExternalId: citada?.external_id ?? null,
         }));
       }
       await removerEcoDoProprioEnvio(
@@ -482,6 +705,31 @@ export async function sendMessageHandler(
       const code = msg.startsWith("storage_sign_failed")
         ? "storage_sign_failed"
         : adapter.codes.sendFailed;
+
+      // Falta de CREDENCIAL não é falha desta mensagem: é canal ainda não
+      // conectado, e o desfecho certo é `queued` — a mesma coisa que o ramo de
+      // `!isConfigured()` acima grava. Marcar `failed` mandaria o follow-up
+      // desistir de uma mensagem que sai sozinha assim que alguém conectar.
+      //
+      // Este ramo existe porque nem todo canal consegue responder `isConfigured`
+      // com honestidade: quando a credencial mora na SESSÃO (conta conectada
+      // pela tela) e não no ambiente, um método SÍNCRONO não tem como saber, e
+      // responder "não configurado" travaria em `queued` um canal que funciona.
+      // Quem sabe é `send()`, que pode consultar o banco — então ele lança, e a
+      // tradução do desfecho acontece aqui.
+      if (msg.startsWith(adapter.codes.notConfigured)) {
+        const { data: emFila } = await supabase
+          .from("messages")
+          .update({
+            metadata: { ...(message.metadata ?? {}), queued_reason: adapter.codes.notConfigured },
+          })
+          .eq("id", message.id)
+          .select(MSG_COLS)
+          .maybeSingle();
+        if (emFila) message = emFila as unknown as Message;
+        return message;
+      }
+
       const { data: updated } = await supabase
         .from("messages")
         .update({
@@ -496,19 +744,47 @@ export async function sendMessageHandler(
     }
   }
 
+  const conversationUpdate: {
+    last_outbound_at: string;
+    last_message_at: string;
+    last_message_preview: string;
+    unread_count_for_assignee: number;
+    bot_silenced_until?: string;
+  } = {
+    last_outbound_at: now,
+    last_message_at: now,
+    last_message_preview: previewFrom({
+      body: input.body,
+      media_url: input.media_url,
+      media_storage_path: input.media_storage_path,
+      type: input.type,
+    }),
+    // Resposta humana/CRM zera pendências — espelha fn_mark_conversation_message
+    // outbound, que o envio pelo CRM não chama (só atualiza colunas à mão).
+    unread_count_for_assignee: 0,
+  };
+  if (ctx.actor.type === "user") {
+    const silenceUntil = extendBotSilence(c.bot_silenced_until, now);
+    if (silenceUntil) conversationUpdate.bot_silenced_until = silenceUntil;
+  }
+
+  await supabase.from("conversations").update(conversationUpdate).eq("id", c.id);
+
+  // Envio pelo CRM não passa por `fn_mark_conversation_message` — carimba o
+  // contato aqui para /app/contacts refletir a resposta (migration 0162).
+  //
+  // O `organization_id` entra explícito, e não é redundância: este handler
+  // também é chamado pelo agent-engine com o client de SERVICE ROLE, que
+  // BYPASSA RLS (`lib/agent-engine/edge/crm/mcp-client.ts` diz isso no próprio
+  // cabeçalho: "todo uso filtra organization_id manualmente"). Sem o filtro, a
+  // única coisa entre esta escrita e outro tenant seria a confiança em
+  // `c.contact_id` — e o anti-pattern nº 10 do CLAUDE.md existe justamente
+  // porque essa confiança já falhou antes.
   await supabase
-    .from("conversations")
-    .update({
-      last_outbound_at: now,
-      last_message_at: now,
-      last_message_preview: previewFrom({
-        body: input.body,
-        media_url: input.media_url,
-        media_storage_path: input.media_storage_path,
-        type: input.type,
-      }),
-    })
-    .eq("id", c.id);
+    .from("contacts")
+    .update({ last_activity_at: now })
+    .eq("id", c.contact_id)
+    .eq("organization_id", c.organization_id);
 
   const a = actorAuditPayload(ctx.actor);
   await audit({

@@ -68,9 +68,19 @@ vi.mock("@/lib/supabase/admin", () => ({
         }),
       }),
     },
-    from: () => ({
-      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
-    }),
+    // Cadeia ENCADEÁVEL: a resolução por sessão filtra `organization_id`, o
+    // identificador do provider E `archived_at is null` (issue #236 /
+    // migration 0165). Um stub em que `eq()` já entrega `maybeSingle` deixa de
+    // casar com o código real — e mock que não casa testa o mock.
+    from: () => {
+      const alvo: Record<string, unknown> = {
+        maybeSingle: async () => ({ data: null, error: null }),
+      };
+      alvo.select = () => alvo;
+      alvo.eq = () => alvo;
+      alvo.is = () => alvo;
+      return alvo;
+    },
   }),
 }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => {}) }));
@@ -154,7 +164,12 @@ function conversaCompleta(forma: Forma = {}): Row {
  * rede morder a perda de uma coluna.
  */
 function makeSupabase(linhaCompleta: Row) {
-  const estado: { message: Row | null; selects: string[] } = { message: null, selects: [] };
+  const estado: {
+    message: Row | null;
+    selects: string[];
+    contactPatch: Row | null;
+    contactFilters: Record<string, unknown>;
+  } = { message: null, selects: [], contactPatch: null, contactFilters: {} };
   const client = {
     from(tabela: string) {
       if (tabela === "conversations") {
@@ -169,6 +184,21 @@ function makeSupabase(linhaCompleta: Row) {
           },
           update: () => ({ eq: async () => ({ error: null }) }),
         };
+      }
+      if (tabela === "meta_templates") {
+        // O espelho da definição aprovada, consultado pelo pré-voo que roda
+        // ANTES de escolher transporte. `null` = não espelhada, e o pré-voo
+        // deixa passar de propósito: recusar o que não se sabe barraria todo
+        // envio de modelo numa instalação cujo sync ainda não rodou.
+        //
+        // Encadeável sem limite: um dublê que fixa a quantidade de filtros faz
+        // o teste quebrar quando a consulta ganha um `eq` novo, com um erro que
+        // não fala do comportamento sob teste.
+        const cadeia: Record<string, unknown> = {
+          eq: () => cadeia,
+          maybeSingle: async () => ({ data: null, error: null }),
+        };
+        return { select: () => cadeia };
       }
       if (tabela === "messages") {
         return {
@@ -192,6 +222,31 @@ function makeSupabase(linhaCompleta: Row) {
                 select: () => ({ maybeSingle: async () => ({ data: { ...estado.message }, error: null }) }),
               }),
             };
+          },
+        };
+      }
+      if (tabela === "contacts") {
+        // O envio carimba `contacts.last_activity_at` (migration 0162), com
+        // filtro por id E por organização — este handler também roda com o
+        // client de service role, que bypassa RLS.
+        //
+        // Encadeável sem limite, pelo mesmo motivo escrito no dublê de
+        // `meta_templates` logo acima: um dublê que fixa a quantidade de
+        // filtros quebra quando a consulta ganha um `eq` novo, com um erro que
+        // não fala do comportamento sob teste. Foi exatamente o que aconteceu
+        // aqui quando o filtro de tenant entrou.
+        const cadeia: Record<string, unknown> = {
+          eq: (col: string, val: unknown) => {
+            estado.contactFilters[col] = val;
+            return cadeia;
+          },
+          then: (resolve: (v: { error: null }) => unknown) =>
+            Promise.resolve({ error: null }).then(resolve),
+        };
+        return {
+          update: (patch: Row) => {
+            estado.contactPatch = patch;
+            return cadeia;
           },
         };
       }
@@ -390,6 +445,37 @@ describe("nenhum desfecho diz `sent` sem nada ter saído", () => {
     expect(msg.status).toBe("queued");
     expect((msg.metadata as Record<string, unknown>).queued_reason).toBe("meta_not_configured");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("o MODELO sai pelo canal da conversa — não pelo número da Meta", async () => {
+    // Medido antes deste caso: `_handler.ts` desviava `type:'template'` para
+    // `sendTemplateForSession`, que lê `META_PHONE_NUMBER_ID` e
+    // `META_SYSTEM_USER_TOKEN` do ambiente e fala com a Graph API. Com os dois
+    // canais configurados, o modelo de uma conversa do canal intermediado saía
+    // pelo número da META, com o token da META.
+    //
+    // Isso não é "falha de envio": é a mensagem chegando ao cliente CERTO pelo
+    // número ERRADO. Ninguém percebe, porque ela sai.
+    //
+    // O caso afere o DOMÍNIO da chamada, que é a única evidência que separa os
+    // dois caminhos — nome de função em `grep` não separa.
+    vi.stubEnv("ZERNIO_API_KEY", "k");
+    vi.stubEnv("ZERNIO_ACCOUNT_ID", CONTA);
+    vi.stubEnv("META_PHONE_NUMBER_ID", "111");
+    vi.stubEnv("META_SYSTEM_USER_TOKEN", "tok-meta");
+    const fetchMock = respostaOk("wamid.TPL");
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { supabase } = makeSupabase(conversaCompleta({ providerConversationId: THREAD }));
+    await sendMessageHandler(
+      supabase,
+      ctx,
+      texto({ type: "template", body: undefined, template_name: "cuenta_activa", template_language: "es" }),
+    );
+
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(urls.join(" "), "o modelo saiu pela Graph API da Meta").not.toMatch(/graph\.facebook\.com/);
+    expect(urls.join(" ")).toMatch(/zernio/);
   });
 
   it("sem nenhuma credencial: `queued` com o motivo do canal, e nada pela rede", async () => {

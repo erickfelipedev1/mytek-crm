@@ -1,4 +1,5 @@
 "use client";
+import { useT } from "@/hooks/i18n/useT";
 import {
   forwardRef,
   useImperativeHandle,
@@ -11,12 +12,14 @@ import { PaperPlaneTilt } from "@/lib/ui/icons";
 import { Button } from "@/components/ui/button";
 import { AttachMenu } from "@/components/inbox/composer/AttachMenu";
 import { AttachmentPreviewDialog } from "@/components/inbox/composer/AttachmentPreviewDialog";
+import { ContactPickerDialog } from "@/components/inbox/composer/ContactPickerDialog";
 import { AudioRecorder } from "@/components/inbox/composer/AudioRecorder";
 import { DraftReplyButton } from "@/components/inbox/composer/DraftReplyButton";
 import { EmojiButton } from "@/components/inbox/composer/EmojiButton";
 import { resolveSlash, TemplateMenu } from "@/components/inbox/composer/TemplateMenu";
 import { useCreateNote } from "@/hooks/inbox/useCreateNote";
 import { useMessageTemplates, type MessageTemplate } from "@/hooks/inbox/useMessageTemplates";
+import { X } from "lucide-react";
 import { useSendMessage } from "@/hooks/inbox/useSendMessage";
 import { useUploadMedia } from "@/hooks/inbox/useUploadMedia";
 import { imagemDoClipboard } from "@/lib/inbox/clipboard-image";
@@ -32,16 +35,48 @@ interface Props {
   disabled?: boolean;
   /** Set true when contact is blocked / anonymized — explanation shown. */
   blockedReason?: string | null;
+  /**
+   * Janela de 24h fechada: barra a RESPOSTA, e só ela.
+   *
+   * Separado de `blockedReason` porque a nota interna nunca chega ao cliente —
+   * a regra da plataforma não a alcança, e barrá-la tira do atendente
+   * justamente o lugar onde ele registra por que a conversa esfriou. A primeira
+   * versão deste bloqueio usava `blockedReason` e levou a nota junto.
+   */
+  janelaFechada?: string | null;
+  /**
+   * A mensagem que esta resposta CITA, quando o atendente escolheu responder
+   * "em cima" de uma. `null` = envio solto, o caso comum.
+   *
+   * Vem de fora e não daqui porque quem escolhe é a lista de mensagens: o
+   * composer só precisa mostrar o que foi escolhido e mandá-lo junto.
+   */
+  respondendo?: { id: string; body: string | null; direction: string } | null;
+  /** Desfaz a escolha — o `x` da faixa de citação. */
+  onCancelarResposta?: () => void;
   /** Nome do contato da conversa, para interpolar {{nome}}/{{primeiro_nome}} do template escolhido. */
   contactName?: string | null;
+  /** Contato da conversa — excluído do seletor de cartão compartilhado. */
+  currentContactId?: string | null;
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { conversationId, disabled, blockedReason, contactName },
+  {
+    conversationId,
+    disabled,
+    blockedReason,
+    janelaFechada,
+    contactName,
+    currentContactId,
+    respondendo,
+    onCancelarResposta,
+  },
   ref,
 ) {
+  const t = useT();
   const [text, setText] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [contactPickerOpen, setContactPickerOpen] = useState(false);
   const [menuDismissed, setMenuDismissed] = useState(false);
   const [mode, setMode] = useState<"reply" | "note">("reply");
   const taRef = useRef<HTMLTextAreaElement | null>(null);
@@ -56,8 +91,13 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     focus: () => taRef.current?.focus(),
   }));
 
-  const isDisabled =
-    disabled || !!blockedReason || send.isPending || upload.isPending || createNote.isPending;
+  // send/createNote fora do disable: o texto some na hora do envio; travar o campo
+  // até a API voltar impedia digitar a próxima mensagem com o campo ainda cheio.
+  const isDisabled = disabled || !!blockedReason || upload.isPending;
+  // A janela só alcança o que SAI. Em modo nota o composer segue liberado: a
+  // nota interna nunca chega ao cliente, e é onde o atendente registra por que
+  // a conversa esfriou — barrá-la tira exatamente o que ainda dá para fazer.
+  const respostaBarrada = isDisabled || (mode === "reply" && !!janelaFechada);
 
   function autoresize() {
     const ta = taRef.current;
@@ -68,26 +108,38 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 
   function handleSubmit() {
     const body = text.trim();
-    if (!body || isDisabled) return;
+    if (!body || (mode === "note" ? isDisabled : respostaBarrada)) return;
+
+    setText("");
+    requestAnimationFrame(() => autoresize());
+
+    const restoreOnError = () => {
+      setText(body);
+      requestAnimationFrame(() => autoresize());
+    };
+
     if (mode === "note") {
-      createNote.mutate(
-        { conversation_id: conversationId, body },
-        {
-          onSuccess: () => {
-            setText("");
-            requestAnimationFrame(() => autoresize());
-          },
-        },
-      );
+      createNote.mutate({ conversation_id: conversationId, body }, { onError: restoreOnError });
       return;
     }
     send.mutate(
-      { conversation_id: conversationId, body, type: "text" },
+      {
+        conversation_id: conversationId,
+        body,
+        type: "text",
+        ...(respondendo ? { reply_to_message_id: respondendo.id } : {}),
+      },
       {
         onSuccess: () => {
           setText("");
+          // A citação vale para UMA mensagem. Mantê-la depois do envio faria a
+          // próxima frase sair citando algo que o atendente já respondeu.
+          onCancelarResposta?.();
           requestAnimationFrame(() => autoresize());
         },
+        // Do upstream, e fica: sem isto o texto some quando o envio falha, e
+        // quem escreveu um parágrafo o perde sem ter como recuperá-lo.
+        onError: restoreOnError,
       },
     );
   }
@@ -128,7 +180,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
    * Ctrl+V precisa continuar sendo o Ctrl+V de sempre.
    */
   function onPaste(e: ClipboardEvent<HTMLTextAreaElement>) {
-    if (mode !== "reply" || isDisabled || pendingFile) return;
+    if (mode !== "reply" || respostaBarrada || pendingFile) return;
     const imagem = imagemDoClipboard(e.clipboardData, new Date());
     if (!imagem) return; // colagem de texto segue o caminho normal do browser
     e.preventDefault();
@@ -181,7 +233,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
                 : "text-muted-foreground hover:bg-muted",
             )}
           >
-            Responder
+            {t("Responder")}
           </button>
           <button
             type="button"
@@ -193,11 +245,47 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
                 : "text-muted-foreground hover:bg-muted",
             )}
           >
-            Nota interna
+            {t("Nota interna")}
           </button>
         </div>
+        {/*
+          A FAIXA DA CITAÇÃO — o que o atendente escolheu responder.
+
+          Fica ACIMA do campo, como no WhatsApp, e não dentro dele: o texto
+          citado pode ter várias linhas, e empurrá-lo para dentro do campo faria
+          o que se digita disputar espaço com o que se cita.
+
+          `line-clamp-2` porque o objetivo é reconhecer qual mensagem é, não
+          relê-la — ela está logo acima, no fio.
+        */}
+        {respondendo && mode === "reply" && (
+          <div className="mb-1 flex items-start gap-2 rounded-md border-l-2 border-primary bg-muted/60 px-2 py-1.5">
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] font-medium text-primary">
+                {respondendo.direction === "outbound" ? t("Você") : t("Cliente")}
+              </div>
+              <div className="line-clamp-2 text-xs text-muted-foreground">
+                {respondendo.body?.trim() || t("(sem texto)")}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onCancelarResposta}
+              aria-label={t("Cancelar resposta")}
+              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        )}
         <div className="flex items-end gap-2">
-          {mode === "reply" && <AttachMenu disabled={isDisabled} onPick={setPendingFile} />}
+          {mode === "reply" && (
+            <AttachMenu
+              disabled={respostaBarrada}
+              onPick={setPendingFile}
+              onPickContact={() => setContactPickerOpen(true)}
+            />
+          )}
           {mode === "reply" && (
             <DraftReplyButton conversationId={conversationId} disabled={isDisabled} onDraft={applyDraft} />
           )}
@@ -242,7 +330,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             // uma nota interna precisa saber que ela não vai para o cliente, e
             // essa informação não pode depender de abrir um diálogo.
             placeholder={
-              mode === "note" ? "Escreva uma nota interna… (só o time vê)" : "Escreva uma mensagem…"
+              mode === "note" ? t("Escreva uma nota interna… (só o time vê)") : t("Escreva uma mensagem…")
             }
             title={
               mode === "note"
@@ -253,7 +341,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
               "min-h-9 max-h-40 flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm",
               "placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring",
             )}
-            disabled={isDisabled}
+            disabled={mode === "note" ? isDisabled : respostaBarrada}
             aria-label="Mensagem"
           />
           {text.trim() || mode === "note" ? (
@@ -262,13 +350,13 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
               size="icon"
               className="h-9 w-9 shrink-0"
               onClick={handleSubmit}
-              disabled={isDisabled || !text.trim()}
+              disabled={(mode === "note" ? isDisabled : respostaBarrada) || !text.trim()}
               aria-label="Enviar"
             >
               <PaperPlaneTilt size={16} weight="fill" aria-hidden />
             </Button>
           ) : (
-            <AudioRecorder conversationId={conversationId} disabled={isDisabled} />
+            <AudioRecorder conversationId={conversationId} disabled={respostaBarrada} />
           )}
         </div>
       </div>
@@ -295,6 +383,29 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             // toast já disparado pelo onError de useUploadMedia; dialog fica aberto p/ retry
             return;
           }
+        }}
+      />
+      <ContactPickerDialog
+        open={contactPickerOpen}
+        onOpenChange={setContactPickerOpen}
+        excludeContactId={currentContactId}
+        sending={send.isPending}
+        onPick={(payload) => {
+          send.mutate(
+            {
+              conversation_id: conversationId,
+              type: "contact",
+              metadata: payload.contactId
+                ? { shared_contact_id: payload.contactId }
+                : {
+                    shared_contact: {
+                      name: payload.name,
+                      phone_number: payload.phone_number,
+                    },
+                  },
+            },
+            { onSuccess: () => setContactPickerOpen(false) },
+          );
         }}
       />
     </>
