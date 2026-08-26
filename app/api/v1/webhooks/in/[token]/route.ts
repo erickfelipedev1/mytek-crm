@@ -76,11 +76,16 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   const admin = createAdminClient();
   const { data: source, error: srcErr } = await admin
     .from("webhook_sources")
-    .select("id, name, organization_id, secret_encrypted, default_pipeline_id, default_stage_id, field_map, redirect_to, is_active")
+    .select("id, name, organization_id, kind, secret_encrypted, default_pipeline_id, default_stage_id, field_map, redirect_to, is_active")
     .eq("path_token", token)
     .maybeSingle();
   if (srcErr) return fail("internal_error", srcErr.message, 500, { requestId });
-  if (!source || !source.is_active) {
+  // `kind` no gate, e não só `is_active`: o token de uma fonte `webchat` é
+  // PÚBLICO por desenho (vive no JavaScript do site do cliente, e quem autoriza
+  // lá é a lista de origens). Sem esta linha, bastaria lê-lo no fonte da página
+  // para despejar lead falso por aqui — que é server-to-server e não tem portão
+  // de origem nenhum. Cada token faz uma coisa só.
+  if (!source || !source.is_active || source.kind !== "lead_capture") {
     return fail("not_found", "unknown webhook token", 404, { requestId });
   }
 

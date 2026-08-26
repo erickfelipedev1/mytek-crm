@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import type { Pipeline, Stage } from "@/lib/kanban/types";
+import type { CreateWebhookSourceInput as CreateWebhookSourceSchemaInput } from "@/lib/schemas";
 
 export interface WebhookSourceRow {
   id: string;
@@ -10,7 +11,10 @@ export interface WebhookSourceRow {
   name: string;
   path_token: string;
   is_active: boolean;
+  /** `lead_capture` (formulário) ou `webchat` (chat de site) — migration 0176. */
   kind: string;
+  /** Origens autorizadas a abrir chat. Vazio recusa todas. Só usado em `webchat`. */
+  allowed_origins: string[];
   last_received_at: string | null;
   default_pipeline_id: string;
   default_stage_id: string;
@@ -32,12 +36,17 @@ export interface WebhookSourceEvent {
   status: string;
 }
 
-export interface CreateWebhookSourceInput {
-  name: string;
-  default_pipeline_id: string;
-  default_stage_id: string;
-  redirect_to?: string | null;
-}
+/**
+ * O contrato de criação vem do MESMO Zod que a rota valida.
+ *
+ * Antes havia uma cópia manual aqui, com quatro campos. Ela não estava errada —
+ * estava DESATUALIZADA, que é pior: o schema já aceitava `field_map` e `secret`,
+ * e a tela não tinha como saber que existiam. Ao acrescentar `kind` e
+ * `allowed_origins` ao schema, a cópia mandaria o servidor recusar um campo que
+ * o TypeScript da tela nem deixava escrever. Derivar do schema faz o compilador
+ * ser quem cobra o alinhamento.
+ */
+export type CreateWebhookSourceInput = CreateWebhookSourceSchemaInput;
 
 const SOURCES_KEY = ["webhook-sources"];
 
@@ -61,11 +70,22 @@ export function useCreateWebhookSource() {
   });
 }
 
+/**
+ * Campos que a tela edita. A lista é explícita, e não `Partial<WebhookSourceRow>`,
+ * para o PATCH não virar porta de entrada de coluna que a tela não deveria
+ * mexer (`path_token`, `organization_id`, a autoria da última mudança).
+ */
+type PatchDeFonte = {
+  is_active?: boolean;
+  allowed_origins?: string[];
+  name?: string;
+};
+
 export function useUpdateWebhookSource() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) =>
-      apiClient.patch<{ data: WebhookSourceRow }>(`/api/v1/webhook-sources/${id}`, { is_active }),
+    mutationFn: async ({ id, ...patch }: { id: string } & PatchDeFonte) =>
+      apiClient.patch<{ data: WebhookSourceRow }>(`/api/v1/webhook-sources/${id}`, patch),
     onError: showApiError,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: SOURCES_KEY });

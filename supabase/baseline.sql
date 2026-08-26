@@ -12144,7 +12144,7 @@ notify pgrst, 'reload schema';
 
 
 
--- ---- definer valida a organização de quem chamou (migration 0149) ----
+-- ---- definer valida a organização de quem chamou (migration 0176) ----
 --
 -- Relatório de segurança da comunidade, auditando a tag v1.0.0. A metade sobre
 -- ACL ("definer executáveis por anon") já estava fechada pela 0108/0116 — 0 de
@@ -12270,7 +12270,7 @@ begin
      and p.proname = 'retrieve_top_k_chunks'
      and p.oid::regprocedure::text <> 'retrieve_top_k_chunks(uuid,uuid,vector,integer,real)';
   if v_extra is not null then
-    raise warning '0149: sobrecarga inesperada de retrieve_top_k_chunks sem o guard de membership: %', v_extra;
+    raise warning '0176: sobrecarga inesperada de retrieve_top_k_chunks sem o guard de membership: %', v_extra;
   end if;
 end $$;
 
@@ -12594,7 +12594,7 @@ end$$;
 -- esta função é SECURITY DEFINER, roda como `postgres` por cima da RLS e recebe
 -- `p_organization_id` como ARGUMENTO. Executável por `authenticated`, qualquer
 -- usuário logado de qualquer tenant poderia reescrever o funil de OUTRA
--- organização passando o id dela — exatamente a classe de furo que a 0149
+-- organização passando o id dela — exatamente a classe de furo que a 0176
 -- fechou. O invariante `hardening-definer-varredura` reprova definer volátil
 -- alcançável por `authenticated` fora da allowlist, e esta não entra nela.
 revoke execute on function public.fn_aplicar_quadro_do_onboarding(uuid, uuid, text, text, jsonb)
@@ -13702,6 +13702,45 @@ create trigger trg_platform_branding_touch
 
 notify pgrst, 'reload schema';
 
+-- ---- canal webchat (migration 0176) ----
+-- Chat de site na mesma conversa do WhatsApp. Ver docs/specs/canal-webchat.md.
+-- Auto-curativo: todos os passos são idempotentes e nenhum depende de dados do
+-- tenant, então o `update.sh` de um clone antigo aplica sem tocar em linha viva.
+
+alter table public.conversations
+  drop constraint if exists conversations_channel_check;
+alter table public.conversations
+  add constraint conversations_channel_check
+  check (channel = any (array['whatsapp'::text, 'webchat'::text]));
+
+alter table public.conversations alter column channel_session_id drop not null;
+alter table public.messages      alter column channel_session_id drop not null;
+
+-- O canal antigo não afrouxa junto: whatsapp sem sessão ficaria `queued` para
+-- sempre. Nenhuma linha existente viola — a coluna era NOT NULL até 0176.
+alter table public.conversations
+  drop constraint if exists conversations_whatsapp_exige_sessao;
+alter table public.conversations
+  add constraint conversations_whatsapp_exige_sessao
+  check (channel <> 'whatsapp' or channel_session_id is not null);
+
+-- Uma conversa de webchat viva por contato: a unique existente inclui
+-- channel_session_id e, com NULL, o Postgres trata cada linha como distinta.
+create unique index if not exists uniq_conversations_org_contact_webchat
+  on public.conversations (organization_id, contact_id)
+  where channel = 'webchat' and status <> all (array['closed'::text, 'archived'::text]);
+
+-- `kind` já nasce na criação da tabela com check (kind in ('lead_capture')).
+-- Aqui o vocabulário é ESTENDIDO, nunca trocado: recriar o CHECK sem
+-- 'lead_capture' rejeitaria toda linha que o clone já tem.
+alter table public.webhook_sources
+  drop constraint if exists webhook_sources_kind_check;
+alter table public.webhook_sources
+  add constraint webhook_sources_kind_check
+  check (kind = any (array['lead_capture'::text, 'webchat'::text]));
+
+alter table public.webhook_sources
+  add column if not exists allowed_origins text[] not null default '{}'::text[];
 
 -- ---- logo da marca: BUCKET e COLUNA (migration 0158) ----
 --

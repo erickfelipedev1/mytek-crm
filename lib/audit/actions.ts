@@ -205,6 +205,8 @@ export const AUDIT_ACTIONS = [
   "webhook.source_deleted",
   "webhook.lead_received",
   "webhook.inbound_invalid_signature",
+  // Canal webchat (migration 0176): abertura de conversa a partir do site.
+  "webchat.session_opened",
   "automation.rule_created",
   "automation.rule_updated",
   "automation.rule_deleted",

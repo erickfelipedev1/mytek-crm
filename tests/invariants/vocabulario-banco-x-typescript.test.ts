@@ -132,6 +132,22 @@ const PARES: Array<{
     simbolo: "CaseEventKind",
   },
   {
+    tabela: "webhook_sources",
+    coluna: "kind",
+    // lib/operacao/entradas-automaticas.ts → TipoDeEntrada.
+    //
+    // O par nasce no MESMO commit que conserta a 0176, e por causa dela: a
+    // migration inventou 'form' como terceiro nome para `lead_capture` e
+    // recriou o CHECK apenas com ('form','webchat'). O `add column if not
+    // exists` virou no-op silencioso — a coluna já existia —, então o default
+    // continuou 'lead_capture' enquanto a constraint nova dizia que esse valor
+    // era inválido. Toda escrita em `webhook_sources` passou a falhar com
+    // 23514, e o único aviso foi o CI reprovando dois testes de RLS que nem
+    // falam de webchat.
+    arquivo: "lib/operacao/entradas-automaticas.ts",
+    simbolo: "TipoDeEntrada",
+  },
+  {
     tabela: "system_update_runs",
     coluna: "status",
     // lib/system/update-run.ts → RunStatus

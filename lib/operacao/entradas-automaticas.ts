@@ -35,13 +35,29 @@ export interface DepsDaOperacao {
   requestId: string;
 }
 
+/**
+ * O que uma entrada automática É — e o par que o invariante
+ * `vocabulario-banco-x-typescript` compara com o CHECK de `webhook_sources.kind`.
+ *
+ * `lead_capture`: um POST vira contato+lead e acabou (formulário de site).
+ * `webchat`: abre conversa e troca mensagens (migration 0176).
+ *
+ * A lista existe em TypeScript porque os dois lados já divergiram uma vez: a
+ * 0176 nasceu inventando um terceiro nome para `lead_capture` e recriou o CHECK
+ * sem ele, derrubando toda linha existente. Vocabulário sem par declarado é
+ * vocabulário que só avisa da divergência com um 23514 em produção.
+ */
+export type TipoDeEntrada = "lead_capture" | "webchat";
+
 /** A fonte como ela sai para quem lê: sem o segredo, com o fato de haver um. */
 export interface FonteVisivel {
   id: string;
   organization_id: string;
   name: string;
   is_active: boolean;
-  kind: string;
+  kind: TipoDeEntrada;
+  /** Origens de browser autorizadas a abrir chat. Só faz sentido em `webchat`. */
+  allowed_origins: string[];
   path_token: string;
   default_pipeline_id: string;
   default_stage_id: string;
@@ -63,9 +79,9 @@ export interface FonteVisivel {
  * "de passagem" numa refatoração é como uma tela quebra em silêncio.
  */
 const COLUNAS =
-  "id, organization_id, name, is_active, kind, path_token, default_pipeline_id, default_stage_id, " +
-  "redirect_to, field_map, last_received_at, secret_encrypted, created_at, updated_at, " +
-  "last_change_actor_kind, last_change_at";
+  "id, organization_id, name, is_active, kind, allowed_origins, path_token, default_pipeline_id, " +
+  "default_stage_id, redirect_to, field_map, last_received_at, secret_encrypted, created_at, " +
+  "updated_at, last_change_actor_kind, last_change_at";
 
 function semSegredo(linha: Record<string, unknown>): FonteVisivel {
   const { secret_encrypted, ...resto } = linha;
@@ -181,6 +197,8 @@ export interface NovaEntradaAutomatica {
   field_map?: Record<string, string[]>;
   /** Já CIFRADO pelo chamador. A operação nunca vê plaintext de segredo. */
   secret_encrypted?: string | null;
+  kind?: TipoDeEntrada;
+  allowed_origins?: string[];
 }
 
 export async function criarEntradaAutomatica(
@@ -210,6 +228,10 @@ export async function criarEntradaAutomatica(
       default_stage_id: input.default_stage_id,
       field_map: input.field_map ?? {},
       redirect_to: input.redirect_to ?? null,
+      kind: input.kind ?? "lead_capture",
+      // Lista vazia é o default seguro: uma fonte de chat sem origem declarada
+      // recusa TODA abertura de sessão, em vez de aceitar qualquer site.
+      allowed_origins: input.allowed_origins ?? [],
       ...autoriaDaMudanca(deps.actor),
     })
     .select(COLUNAS)
