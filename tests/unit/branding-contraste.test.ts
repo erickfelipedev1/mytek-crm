@@ -58,9 +58,9 @@ const FIXTURE = [
 describe("extrairRegua — os pares saem do globals.css, nunca de lista à mão", () => {
   it("acha os dois temas, a rampa do produto e os neutros", () => {
     expect(REGUA.rampaDoProduto).toHaveLength(11);
-    expect(REGUA.rampaDoProduto[6]).toBe("#506d48");
+    expect(REGUA.rampaDoProduto[6]).toBe("#175dfc");
     expect(REGUA.claro.neutros).toHaveLength(11);
-    expect(REGUA.escuro.neutros[9]).toBe("#161510");
+    expect(REGUA.escuro.neutros[9]).toBe("#0a0a0a");
     expect(REGUA.claro.base.map((b) => b.chave)).toEqual([
       "--color-bg",
       "--color-surface",
@@ -119,9 +119,14 @@ describe("extrairRegua — os pares saem do globals.css, nunca de lista à mão"
     const razao = (papel: string, superficie: string) =>
       pares.find((p) => p.papel === papel && p.superficie === superficie)?.razao ?? 0;
 
-    expect(razao("--color-accent", "--color-bg")).toBeCloseTo(5.51, 2);
-    expect(razao(":focus-visible/outline", "--color-bg")).toBeCloseTo(3.79, 2);
-    expect(razao(":focus-visible/outline", "--color-surface-elevated")).toBeCloseTo(3.6, 2);
+    // Números RE-MEDIDOS quando a rampa passou de Sage para o azul do MyTek
+    // (5,51 / 3,79 / 3,60 eram os da Sage). Recalibrar aqui é legítimo porque
+    // quem garante o PISO é outro teste — "a rampa inteira cabe nos pisos", logo
+    // abaixo, que compara contra o mínimo e não contra um número anotado. Este
+    // aqui é registro: serve para uma mudança de paleta aparecer como diff.
+    expect(razao("--color-accent", "--color-bg")).toBeCloseTo(5.24, 2);
+    expect(razao(":focus-visible/outline", "--color-bg")).toBeCloseTo(3.995, 2);
+    expect(razao(":focus-visible/outline", "--color-surface-elevated")).toBeCloseTo(3.67, 2);
   });
 
   it("a Sage inteira, como está no CSS, cabe nos pisos", () => {

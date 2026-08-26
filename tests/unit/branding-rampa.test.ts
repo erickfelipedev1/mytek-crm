@@ -85,6 +85,16 @@ describe("conversões de cor", () => {
   });
 });
 
+/**
+ * A semente da rampa DESTA instalação — o grau 600 do `globals.css`.
+ *
+ * Era `#506d48` (a Sage do upstream) e virou o azul da marca quando o fork
+ * trocou a paleta. Fica em constante para o literal aparecer UMA vez: espalhado
+ * por três assertions, quem trocasse a paleta consertaria duas e passaria meses
+ * com a terceira medindo a cor de ontem.
+ */
+const SEMENTE_DO_PRODUTO = "#175dfc";
+
 describe("rampaDeSemente — catraca de calibração contra o design system", () => {
   const esperados = stopsSageDoCss();
 
@@ -93,11 +103,11 @@ describe("rampaDeSemente — catraca de calibração contra o design system", ()
     // por não ter o que comparar — instrumento morto tem cara de teste verde.
     expect(esperados).toHaveLength(11);
     expect(new Set(esperados).size).toBe(11);
-    expect(esperados[K]).toBe("#506d48");
+    expect(esperados[K]).toBe(SEMENTE_DO_PRODUTO);
   });
 
-  it("reproduz os 11 stops Sage a partir de #506d48 com Δ ≤ 2/255 por canal", () => {
-    const derivada = rampaDeSemente("#506d48");
+  it("reproduz os 11 stops do produto a partir da semente com Δ ≤ 2/255 por canal", () => {
+    const derivada = rampaDeSemente(SEMENTE_DO_PRODUTO);
     const distancias = esperados.map((esperado, i) => distanciaPorCanal(esperado, derivada[i]!));
     expect(
       Math.max(...distancias),
