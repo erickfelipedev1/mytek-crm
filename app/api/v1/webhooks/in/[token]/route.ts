@@ -288,37 +288,45 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     return fail("invalid_request", "Nenhum campo mapeável (nome/telefone/email).", 400, { requestId });
   }
 
-  // Contato: upsert por telefone (se houver) — reusa a coluna E.164 canônica.
-  // is_merged_into null: contato mesclado não deve ser reaproveitado (o índice
-  // único uniq_contacts_org_phone só cobre a linha ativa por telefone).
+  // Contato: upsert pela IDENTIDADE do envio — telefone primeiro (é a chave do
+  // canal primário), e-mail como segundo caminho.
+  //
+  // Os DOIS caminhos existem porque os índices são dois, e ambos parciais sobre
+  // a linha ATIVA: `uniq_contacts_org_phone` e `uniq_contacts_org_email` (daí o
+  // `is_merged_into null` — contato mesclado não se reaproveita).
+  //
+  // O ramo do e-mail não é enfeite: o gate acima aceita um envio que traga só
+  // nome e e-mail, e formulário de site costuma não pedir telefone. Sem ele o
+  // lead nascia SEM contato e o e-mail era DESCARTADO — `mapped.email` não entra
+  // em `custom_fields` (o mapeador o consome) e, sem contato, não havia onde
+  // gravá-lo. A rota aceitava o envio e perdia em silêncio o único jeito de
+  // responder aquela pessoa. Coberto pelos casos 8 e 9 de
+  // `tests/invariants/webhooks-inbound.test.ts`.
   let contactId: string | undefined;
-  if (mapped.phone) {
-    const selectActiveByPhone = () =>
+  if (mapped.phone || mapped.email) {
+    const buscarAtivoPor = (coluna: "phone_number" | "email_normalized", valor: string) =>
       admin
         .from("contacts")
         .select("id")
         .eq("organization_id", source.organization_id)
-        .eq("phone_number", mapped.phone)
+        .eq(coluna, valor)
         .is("is_merged_into", null)
         .maybeSingle();
 
-    // uniq_contacts_org_email (baseline.sql) é um SEGUNDO índice único parcial,
-    // independente de uniq_contacts_org_phone — um INSERT pode colidir nele
-    // mesmo com telefone inédito (mesma pessoa manda e-mail repetido, telefone
-    // novo). email_normalized é coluna GERADA (`lower(trim(email))`), então a
-    // comparação replica exatamente essa normalização — não `email` bruto.
-    const selectActiveByEmail = (): ReturnType<typeof selectActiveByPhone> | null => {
-      if (!mapped.email) return null;
-      return admin
-        .from("contacts")
-        .select("id")
-        .eq("organization_id", source.organization_id)
-        .eq("email_normalized", mapped.email.trim().toLowerCase())
-        .is("is_merged_into", null)
-        .maybeSingle();
-    };
+    const selectActiveByPhone = (): ReturnType<typeof buscarAtivoPor> | null =>
+      mapped.phone ? buscarAtivoPor("phone_number", mapped.phone) : null;
 
-    const { data: existing } = await selectActiveByPhone();
+    // uniq_contacts_org_email é um SEGUNDO índice único parcial, independente do
+    // de telefone — um INSERT pode colidir nele mesmo com telefone inédito
+    // (mesma pessoa manda e-mail repetido, telefone novo). `email_normalized` é
+    // coluna GERADA (`lower(trim(email))`), então a comparação replica
+    // exatamente essa normalização — não `email` bruto.
+    const selectActiveByEmail = (): ReturnType<typeof buscarAtivoPor> | null =>
+      mapped.email ? buscarAtivoPor("email_normalized", mapped.email.trim().toLowerCase()) : null;
+
+    // Telefone primeiro; sem ele, o e-mail É a identidade do envio.
+    const buscaInicial = selectActiveByPhone() ?? selectActiveByEmail();
+    const { data: existing } = buscaInicial ? await buscaInicial : { data: null };
     if (existing) {
       contactId = existing.id as string;
     } else {
@@ -326,7 +334,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
         .from("contacts")
         .insert({
           organization_id: source.organization_id,
-          name: mapped.name ?? mapped.phone,
+          name: mapped.name ?? mapped.phone ?? mapped.email,
           phone_number: mapped.phone,
           email: mapped.email,
           source: "webhook",
@@ -351,7 +359,8 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
           // testes do fix do Respondi). Telefone primeiro — é o identificador
           // mais confiável do produto; e-mail só como fallback, e só quando o
           // payload realmente trouxe um.
-          const { data: winnerByPhone } = await selectActiveByPhone();
+          const byPhone = selectActiveByPhone();
+          const { data: winnerByPhone } = byPhone ? await byPhone : { data: null };
           if (winnerByPhone) {
             contactId = winnerByPhone.id as string;
           } else {
