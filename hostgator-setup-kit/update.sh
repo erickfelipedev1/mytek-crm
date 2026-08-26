@@ -206,9 +206,9 @@ step "Baixando a versão nova do app e reiniciando"
 PIN_FALTANDO_ANTES="$(pin_incompleto .env)"
 
 VERSAO_ALVO="${TARGET_TAG#v}"
-export APP_IMAGE="${IMG_APP}:${VERSAO_ALVO}"
-export WORKER_IMAGE="${IMG_WORKER}:${VERSAO_ALVO}"
-export SCHEDULER_IMAGE="${IMG_SCHEDULER}:${VERSAO_ALVO}"
+export APP_IMAGE="$(img_app):${VERSAO_ALVO}"
+export WORKER_IMAGE="$(img_worker):${VERSAO_ALVO}"
+export SCHEDULER_IMAGE="$(img_scheduler):${VERSAO_ALVO}"
 gravar_imagens .env "$VERSAO_ALVO"
 
 # `dc pull` falha se alguma das três imagens ainda não existir no registro — o
