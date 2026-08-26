@@ -451,5 +451,64 @@ R="$( printf 'APP_IMAGE=ghcr.io/melgarafael/deskcommcrm:1.3.0\n' > "$PIN_DIR/.en
         ". '$KIT_DIR_TESTE/_common.sh'; completar_pin_ausente .env" 2>/dev/null || true )"
 check "imagem sem label de versão → não inventa pin" test -z "$R"
 
+
+# ── 12. O dono das imagens: literal por default, declarável num fork ─────────
+#
+# `publish-image.yml` publica em `ghcr.io/<dono>/<nome-da-imagem>`: num fork o
+# DONO muda e os três nomes continuam iguais. Sem `DESKCOMM_IMG_NS`, o kit de um
+# fork instalava o app do upstream por cima do próprio — e gravava a escolha no
+# .env, de modo que todo `up -d` seguinte repetia sozinho.
+echo "── 12. Namespace das imagens: default literal, override declarado"
+
+ns_de() {  # ns_de [valor do override] → as três imagens, uma por linha
+  local override="${1:-}"
+  env -u DESKCOMM_IMG_NS bash -c "
+    ${override:+export DESKCOMM_IMG_NS='$override';}
+    . '$KIT_DIR_TESTE/_common.sh'
+    printf '%s\n%s\n%s\n' \"\$(img_app)\" \"\$(img_worker)\" \"\$(img_scheduler)\"
+  " 2>/dev/null
+}
+
+SEM="$(ns_de)"
+# CONTROLE POSITIVO — sem ele, uma função que sumisse deixaria as provas de
+# baixo passando por comparar vazio com vazio.
+check "sem override, o app é a imagem de sempre" \
+  test "$(printf '%s' "$SEM" | sed -n 1p)" = "ghcr.io/melgarafael/deskcommcrm"
+check "  e o worker também" \
+  test "$(printf '%s' "$SEM" | sed -n 2p)" = "ghcr.io/melgarafael/deskcomm-worker"
+check "  e o scheduler também" \
+  test "$(printf '%s' "$SEM" | sed -n 3p)" = "ghcr.io/melgarafael/deskcomm-scheduler"
+
+COM="$(ns_de "ghcr.io/fulano")"
+check "com override, o app vem do fork" \
+  test "$(printf '%s' "$COM" | sed -n 1p)" = "ghcr.io/fulano/deskcommcrm"
+check "  o worker vem do fork (as TRÊS, não só o app)" \
+  test "$(printf '%s' "$COM" | sed -n 2p)" = "ghcr.io/fulano/deskcomm-worker"
+check "  o scheduler vem do fork" \
+  test "$(printf '%s' "$COM" | sed -n 3p)" = "ghcr.io/fulano/deskcomm-scheduler"
+
+# O que de fato quebrava: `gravar_imagens` REESCREVE as três linhas a cada
+# atualização. Trocar o APP_IMAGE à mão não sobrevive ao próximo update — só a
+# declaração sobrevive.
+NS_DIR="$WORK/ns"; mkdir -p "$NS_DIR"
+: > "$NS_DIR/.env"
+( cd "$NS_DIR" && env DESKCOMM_IMG_NS="ghcr.io/fulano" bash -c \
+    ". '$KIT_DIR_TESTE/_common.sh'; gravar_imagens .env 1.9.0" ) >/dev/null 2>&1
+check "gravar_imagens grava o fork no .env" \
+  grep -q "^APP_IMAGE=ghcr.io/fulano/deskcommcrm:1.9.0$" "$NS_DIR/.env"
+check "  e NÃO o upstream (era exatamente o defeito)" \
+  bash -c "! grep -q 'melgarafael' '$NS_DIR/.env'"
+check "  as três linhas, na mesma versão" \
+  bash -c "grep -qc '^SCHEDULER_IMAGE=ghcr.io/fulano/deskcomm-scheduler:1.9.0$' '$NS_DIR/.env'"
+
+# A REGRA QUE PROTEGE QUEM NÃO TEM FORK. Toda instalação viva já tem o namespace
+# de sempre gravado; se o default mudasse, o próximo update apontaria para outro
+# lugar sem ninguém pedir.
+: > "$NS_DIR/.env"
+( cd "$NS_DIR" && env -u DESKCOMM_IMG_NS bash -c \
+    ". '$KIT_DIR_TESTE/_common.sh'; gravar_imagens .env 1.9.0" ) >/dev/null 2>&1
+check "sem override, grava exatamente a string de sempre" \
+  grep -q "^APP_IMAGE=ghcr.io/melgarafael/deskcommcrm:1.9.0$" "$NS_DIR/.env"
+
 if [ "$FAILS" -eq 0 ]; then echo "OK — todas as provas passaram."; else echo "FALHOU — $FAILS prova(s)."; fi
 exit $((FAILS > 0))

@@ -1148,7 +1148,7 @@ else
   c_ylw "⚠ Não consegui descobrir a última versão publicada (rede?)."
   c_ylw "  Instalando pelo canal 'latest'. Depois rode: bash hostgator-setup-kit/update.sh"
 fi
-IMAGEM_APP_DEFAULT="${IMG_APP}:${VERSAO_ALVO}"
+IMAGEM_APP_DEFAULT="$(img_app):${VERSAO_ALVO}"
 
 FIELDS=(
   "DOMAIN|Domínio do CRM (ex: crm.suaempresa.com.br)||v_domain||"
@@ -1429,9 +1429,9 @@ esac
   # `latest` é uma matriz de compatibilidade que ninguém testou. Estas duas
   # imagens existem desde que o worker deixou de ser `build:`-only — antes disso
   # ele era compilado aqui na VPS e nenhum update jamais o alcançava.
-  envq WORKER_IMAGE "${IMG_WORKER}:${TAG_ALVO}"
+  envq WORKER_IMAGE "$(img_worker):${TAG_ALVO}"
   envq WORKER_PULL_POLICY "$PULL_POLICY_ALVO"
-  envq SCHEDULER_IMAGE "${IMG_SCHEDULER}:${TAG_ALVO}"
+  envq SCHEDULER_IMAGE "$(img_scheduler):${TAG_ALVO}"
   envq SCHEDULER_PULL_POLICY "$PULL_POLICY_ALVO"
   envq DOMAIN "$DOMAIN"
   envq ACME_EMAIL "$ACME_EMAIL"

@@ -423,13 +423,33 @@ url_do_schema() {
 psql_run() { docker run --rm -i postgres:17-alpine psql "$(url_do_schema)" -v ON_ERROR_STOP=1 "$@"; }
 
 # ── As três imagens que NÓS publicamos ───────────────────────────────────────
-# O namespace é constante e literal de propósito: ele está gravado no .env de
-# toda instalação viva, e derivá-lo de variável faria o kit antigo (que já está
-# no disco do cliente) e o novo montarem strings diferentes.
-IMG_NS="ghcr.io/melgarafael"
-IMG_APP="${IMG_NS}/deskcommcrm"
-IMG_WORKER="${IMG_NS}/deskcomm-worker"
-IMG_SCHEDULER="${IMG_NS}/deskcomm-scheduler"
+#
+# O namespace é LITERAL por default, e o motivo original continua valendo: ele
+# está gravado no `.env` de toda instalação viva, e DERIVÁ-LO (do remote git, do
+# nome da pasta) faria o kit antigo — o que já está no disco do cliente — e o
+# novo montarem strings diferentes para a mesma instalação.
+#
+# `DESKCOMM_IMG_NS` não é derivação: é declaração. Quem não a define recebe
+# exatamente a string de sempre, então kit velho e kit novo continuam de acordo;
+# quem a define no `.env` está dizendo, por escrito, de onde as imagens DESTA
+# instalação vêm — e essa declaração mora no mesmo arquivo que já guarda o
+# resultado.
+#
+# Existe porque `publish-image.yml` publica em
+# `ghcr.io/${{ github.repository_owner }}/<nome-da-imagem>`: num FORK, o dono
+# muda e os três nomes de imagem continuam iguais. Sem o override, o kit de um
+# fork instala o app do UPSTREAM por cima do próprio — contra um banco onde o
+# `baseline.sql` do fork acabou de ser aplicado — e grava essa escolha no `.env`,
+# de modo que todo `docker compose up -d` seguinte repete o erro sozinho.
+#
+# São FUNÇÕES e não atribuições pelo mesmo motivo do `url_do_schema` (ver o
+# cabeçalho dele): o `_common.sh` é *sourced* ANTES do `load_env`, então uma
+# atribuição no topo CONGELARIA o default e nunca enxergaria o que está no
+# `.env`. A resolução tem de acontecer na hora do uso.
+ns_das_imagens() { printf '%s' "${DESKCOMM_IMG_NS:-ghcr.io/melgarafael}"; }
+img_app()        { printf '%s' "$(ns_das_imagens)/deskcommcrm"; }
+img_worker()     { printf '%s' "$(ns_das_imagens)/deskcomm-worker"; }
+img_scheduler()  { printf '%s' "$(ns_das_imagens)/deskcomm-scheduler"; }
 
 # A última versão publicada (ex.: "1.2.1"), ou vazio se não deu para saber.
 #
@@ -579,7 +599,7 @@ completar_pin_ausente() {  # completar_pin_ausente [envfile]
     # `<no value>` = imagem sem o label (build local). Canal não é versão.
     case "$ver" in ""|"<no value>"|latest|main|stable) continue ;; esac
 
-    set_env_var "$envfile" "$chave" "${IMG_NS}/${repo}:${ver}"
+    set_env_var "$envfile" "$chave" "$(ns_das_imagens)/${repo}:${ver}"
     set_env_var "$envfile" "${chave%_IMAGE}_PULL_POLICY" missing
     corrigidos="$corrigidos $svc"
   done
@@ -604,11 +624,11 @@ gravar_imagens() {
     latest|main|stable) politica="always" ;;
     *)                  politica="missing" ;;
   esac
-  set_env_var "$envfile" APP_IMAGE             "${IMG_APP}:${versao}"
+  set_env_var "$envfile" APP_IMAGE             "$(img_app):${versao}"
   set_env_var "$envfile" APP_PULL_POLICY       "$politica"
-  set_env_var "$envfile" WORKER_IMAGE          "${IMG_WORKER}:${versao}"
+  set_env_var "$envfile" WORKER_IMAGE          "$(img_worker):${versao}"
   set_env_var "$envfile" WORKER_PULL_POLICY    "$politica"
-  set_env_var "$envfile" SCHEDULER_IMAGE       "${IMG_SCHEDULER}:${versao}"
+  set_env_var "$envfile" SCHEDULER_IMAGE       "$(img_scheduler):${versao}"
   set_env_var "$envfile" SCHEDULER_PULL_POLICY "$politica"
 }
 
