@@ -14339,3 +14339,37 @@ comment on column public.automation_rule_runs.status is
   'número, ou a mensagem ficou na fila do canal.';
 
 notify pgrst, 'reload schema';
+
+
+-- ---- meta ads: lead ads + conversions api (migration 0177) ----
+--
+-- Duas necessidades do negócio, uma credencial por trás: (a) formulário
+-- nativo do Facebook/Instagram (Lead Ads) precisa virar lead no CRM, mas a
+-- captação chega pelo webhook `leadgen` da Meta, não por um POST do site do
+-- cliente; (b) quando o time marca um lead como qualificado no Kanban, o CRM
+-- avisa a Meta via Conversions API pra o algoritmo de anúncios aprender a
+-- buscar gente parecida.
+--
+-- `tenant_integrations` já é o lugar certo pela DIRC (Integrar) — já guarda
+-- token OAuth cifrado, webhook secret cifrado e store_metadata por provider,
+-- exatamente a forma de que (a) e (b) precisam. Não nasce tabela nova; só o
+-- provider ganha um valor a mais no vocabulário fechado.
+--
+-- Aditiva: só ALARGA o conjunto aceito — nenhuma linha existente passa a
+-- violar. CHECK reconstruído em UM bloco só (lição do #159/#175).
+alter table public.tenant_integrations
+  drop constraint if exists tenant_integrations_provider_check;
+
+alter table public.tenant_integrations
+  add constraint tenant_integrations_provider_check check (provider in (
+    'nuvemshop',
+    'vtex',
+    'shopify',
+    'meta_ads'
+  ));
+
+comment on column public.tenant_integrations.provider is
+  'nuvemshop/vtex/shopify = e-commerce (OAuth, webhooks de pedido). '
+  'meta_ads = Meta Lead Ads + Conversions API (ver migration 0177 e docs/integrations/meta-ads.md).';
+
+notify pgrst, 'reload schema';

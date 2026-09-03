@@ -287,6 +287,16 @@ const schema = z.object({
     .default("false")
     .transform((v) => v === "true"),
 
+  /**
+   * Handshake do webhook `leadgen` (Lead Ads — `app/api/v1/webhooks/meta/leadgen`).
+   * O MESMO valor é colado no campo "Verify Token" ao registrar a Callback URL
+   * no painel do App Meta — é como a Meta confirma que o dono do App configurou
+   * a URL certa antes de mandar tráfego pra ela. Opcional: ausente, a rota
+   * recusa o handshake (fail-closed) até o operador configurar as duas pontas;
+   * não trava a instalação fresca (quem não usa Lead Ads nunca chama essa rota).
+   */
+  META_WEBHOOK_VERIFY_TOKEN: z.string().optional().default(""),
+
   // App URLs
   NEXT_PUBLIC_APP_URL: z
     .string()

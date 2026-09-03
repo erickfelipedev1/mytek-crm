@@ -48,6 +48,18 @@ export const actionSchema = z.discriminatedUnion("type", [
       secret_enc: z.string().max(4000).optional(),
     }),
   }),
+  z.object({
+    type: z.literal("meta_capi"),
+    config: z.object({
+      // Nome do evento no Meta Ads Manager. Default "Lead" se omitido — a
+      // ação (lib/automation/actions/meta-capi.ts) resolve o default, então
+      // aqui é só opcional.
+      event_name: z.string().min(1).max(60).optional(),
+      // Sobrepõe o pixel_id da conexão (tenant_integrations.store_metadata) —
+      // só necessário em conta com mais de um pixel/dataset.
+      pixel_id: z.string().min(1).max(60).optional(),
+    }),
+  }),
 ]);
 
 /**
