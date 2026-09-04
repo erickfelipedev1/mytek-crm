@@ -143,6 +143,19 @@ const KNOWN_DEBT: { reason: string; files: string[] }[] = [
   },
   {
     reason:
+      "Chamam `graph.facebook.com` pra Meta Ads (Lead Ads + Conversions API, " +
+      "migration 0177) — um produto Meta DIFERENTE do canal WhatsApp que esta " +
+      "doutrina governa (`lib/channels/adapters/meta-cloud.ts`). O regex casa o " +
+      "hostname, não a feature: `graph.facebook.com` é a mesma API-mãe de vários " +
+      "produtos Meta (WhatsApp Cloud API, Lead Ads, Marketing API), e o nome do " +
+      "host é fixado pela própria Meta — não é um provider TROCÁVEL atrás de um " +
+      "adapter (não há 'capacidade' pra pedir em vez dele, como haveria pra " +
+      "WAHA/Zernio). Zero acoplamento com o transporte de mensagens: nenhum dos " +
+      "dois lê/escreve `channel_sessions`, `conversations` ou `messages`.",
+    files: ["app/api/v1/webhooks/meta/leadgen/route.ts", "lib/automation/actions/meta-capi.ts"],
+  },
+  {
+    reason:
       "Menção em COMENTÁRIO/prosa técnica — não há acoplamento nenhum no código. " +
       "O regex é o da doutrina (que fala em 'string') e não distingue prosa de " +
       "código. Medido ao vivo nesta task: o comentário que eu escrevi explicando " +
