@@ -8,6 +8,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [1.6.3] — 2026-09-04
+
+A tela de boas-vindas do onboarding ("isto aqui já está de pé") passa a citar as duas
+integrações que a 1.6.2 trouxe — automações que avisam n8n/Make, e Meta Ads (Lead Ads +
+Conversions API). Sem mudança de comportamento, só a tela contando o que já dá pra usar.
+
 ## [1.6.2] — 2026-09-04
 
 **Meta Ads: formulário nativo do Facebook/Instagram vira lead sozinho, e lead qualificado avisa a Meta.**
