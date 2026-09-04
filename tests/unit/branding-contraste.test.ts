@@ -23,7 +23,7 @@ import {
   superficiesDoTema,
 } from "@/lib/branding/contraste";
 import type { Regua, TemaDaRegua } from "@/lib/branding/contraste";
-import { deltaEOklab, hexParaOklch, rampaDeSemente } from "@/lib/branding/rampa";
+import { deltaEOklab, hexParaOklch, oklchParaHex, rampaDeSemente } from "@/lib/branding/rampa";
 import type { Rampa } from "@/lib/branding/rampa";
 
 const RAIZ = process.cwd();
@@ -58,9 +58,9 @@ const FIXTURE = [
 describe("extrairRegua — os pares saem do globals.css, nunca de lista à mão", () => {
   it("acha os dois temas, a rampa do produto e os neutros", () => {
     expect(REGUA.rampaDoProduto).toHaveLength(11);
-    expect(REGUA.rampaDoProduto[6]).toBe("#506d48");
+    expect(REGUA.rampaDoProduto[6]).toBe("#175dfc");
     expect(REGUA.claro.neutros).toHaveLength(11);
-    expect(REGUA.escuro.neutros[9]).toBe("#161510");
+    expect(REGUA.escuro.neutros[9]).toBe("#0a0a0a");
     expect(REGUA.claro.base.map((b) => b.chave)).toEqual([
       "--color-bg",
       "--color-surface",
@@ -119,9 +119,9 @@ describe("extrairRegua — os pares saem do globals.css, nunca de lista à mão"
     const razao = (papel: string, superficie: string) =>
       pares.find((p) => p.papel === papel && p.superficie === superficie)?.razao ?? 0;
 
-    expect(razao("--color-accent", "--color-bg")).toBeCloseTo(5.51, 2);
-    expect(razao(":focus-visible/outline", "--color-bg")).toBeCloseTo(3.79, 2);
-    expect(razao(":focus-visible/outline", "--color-surface-elevated")).toBeCloseTo(3.6, 2);
+    expect(razao("--color-accent", "--color-bg")).toBeCloseTo(5.24, 2);
+    expect(razao(":focus-visible/outline", "--color-bg")).toBeCloseTo(3.67, 2);
+    expect(razao(":focus-visible/outline", "--color-surface-elevated")).toBeCloseTo(3.37, 2);
   });
 
   it("a Sage inteira, como está no CSS, cabe nos pisos", () => {
@@ -303,36 +303,53 @@ describe("derivarMarca — as 16 sementes adversariais", () => {
 });
 
 describe("reconciliação — quem se move são as NOSSAS semânticas", () => {
-  it("a Sage pura já nasce colidida e dispara a reconciliação (controle positivo)", () => {
-    // `--color-success` do bloco escuro é `#82a077`, a MESMA string de
-    // `--color-accent-400` (globals.css:167 e :193). Δ = 0,0°. Se o mecanismo não
-    // disparasse aqui, ele não dispararia em lugar nenhum.
-    expect(REGUA.escuro.semanticas.find((s) => s.nome === "success")?.hex).toBe(
-      REGUA.rampaDoProduto[4],
-    );
+  // Fixture SINTÉTICA, não a marca real do produto: as duas provas abaixo
+  // (algo colide de verdade / nada resolve a colisão) precisam de uma colisão
+  // exata (Δ=0) e de um cerco geométrico sem saída, respectivamente. Isso era
+  // uma coincidência da paleta Sage (`--color-success` do bloco escuro batia
+  // hex-a-hex com `--color-accent-400`) — coincidência que a migração para
+  // MyTek blue desfez (`success` e `accent` viraram cores genuinamente
+  // diferentes, como deveria ser). Prender o teste a uma coincidência da
+  // marca do dia quebra a cada rebrand; a fixture sintética prova o mesmo
+  // MECANISMO (`reconciliarSemanticas`, decouplado de `derivarMarca`/`REGUA`)
+  // sem depender de qual marca está instalada agora.
+  const L = 0.6;
+  const C = 0.15;
+  const corDoAngulo = (h: number) => oklchParaHex({ L, C, h: ((h % 360) + 360) % 360 });
+  const ACCENT_H = 250;
+  const ACCENT_SINTETICO = corDoAngulo(ACCENT_H);
 
-    const sage = derivarMarca("#506d48", REGUA);
-    const movidas = sage.motivos.filter((m) => m.codigo === "semantica_deslocada");
-    expect(movidas.length).toBeGreaterThan(0);
-    expect(movidas).toHaveLength(3);
-    expect(movidas.map((m) => `${m.tema}/${m.alvo}`)).toEqual([
-      "claro/error",
-      "escuro/warning",
-      "escuro/error",
-    ]);
+  it("colisão exata (Δ=0) dispara a reconciliação (controle sintético)", () => {
+    const semanticas = [
+      { nome: "success", hex: ACCENT_SINTETICO }, // colide de propósito, Δ=0,0°
+      { nome: "warning", hex: corDoAngulo(ACCENT_H + 40) },
+      { nome: "error", hex: corDoAngulo(ACCENT_H - 90) },
+    ];
+    expect(deltaESimulado(semanticas[0]!.hex, ACCENT_SINTETICO)).toBe(0);
+
+    const r = reconciliarSemanticas(ACCENT_SINTETICO, semanticas);
+    expect(r.movimentos.length).toBeGreaterThan(0);
+    expect(r.movimentos.map((m) => m.nome)).toContain("success");
+    const movida = r.movimentos.find((m) => m.nome === "success")!;
+    expect(Math.abs(movida.rotacao)).toBeLessThanOrEqual(ROTACAO_MAXIMA);
+    expect(movida.separacaoDepois).toBeGreaterThanOrEqual(PISO_DE_SEPARACAO_SIMULADA);
   });
 
   it("devolve sinal — e não distorção — quando não há rotação que resolva", () => {
     // O laço de retorno do invariante 7 da doutrina Sistema Vivo: a peça diz o que muda
-    // no sistema quando ela não consegue resolver. Na Sage, `success` do tema escuro é
-    // literalmente o accent; girar até 60° ou colide com o accent ou colide com `info`.
-    const sage = derivarMarca("#506d48", REGUA);
-    const sinais = sage.motivos.filter(
-      (m) => m.codigo === "redundancia_nao_cromatica_necessaria",
-    );
-    expect(sinais).toHaveLength(1);
-    expect(sinais[0]).toMatchObject({ tema: "escuro", alvo: "success" });
-    expect(sinais[0]!.detalhe).toMatch(/ícone|rótulo/);
+    // no sistema quando ela não consegue resolver. `success` colide com o accent
+    // (Δ=0) e fica cercado por `warning`/`error`/`info` posicionados de propósito
+    // para que NENHUMA rotação dentro do orçamento (±60°, passo de 5°) escape das
+    // duas travas (separar do accent E não piorar contra as irmãs).
+    const semanticas = [
+      { nome: "success", hex: ACCENT_SINTETICO },
+      { nome: "warning", hex: corDoAngulo(ACCENT_H + 45) },
+      { nome: "error", hex: corDoAngulo(ACCENT_H - 45) },
+      { nome: "info", hex: corDoAngulo(ACCENT_H + 180 + 15) },
+    ];
+    const r = reconciliarSemanticas(ACCENT_SINTETICO, semanticas);
+    expect(r.semSaida).toHaveLength(1);
+    expect(r.semSaida[0]).toMatchObject({ nome: "success" });
   });
 
   it("não inventa rotação impossível numa semântica sem croma", () => {
@@ -375,8 +392,10 @@ describe("reconciliação — quem se move são as NOSSAS semânticas", () => {
         }
       }
     }
-    // Guarda de vacuidade do run inteiro: 23 movimentos medidos nas 16 sementes.
-    expect(movimentosNoRun).toBe(23);
+    // Guarda de vacuidade do run inteiro: 15 movimentos medidos nas 16 sementes
+    // contra a régua MyTek blue (era 23 contra a Sage — a régua mudou, não o
+    // algoritmo; recalibrado em 2026-09-04).
+    expect(movimentosNoRun).toBe(15);
   });
 });
 
@@ -407,13 +426,15 @@ describe("marca acromática — o accent do produto permanece", () => {
         separacaoDoNeutro(regua, tema.grauDoAccent, tema.accent),
       ).toBeGreaterThanOrEqual(PISO_DE_SEPARACAO_DO_NEUTRO);
     }
-    // Os números exatos, fixados: 0,0681 no claro (accent-600 × neutral-600) e 0,1994 no
-    // escuro (accent-400 × neutral-400). São eles que mostram por que o piso do briefing
-    // (8, na convenção ×100 — ou seja 0,08 aqui) não podia ser aceito sem medir: ele
-    // reprovaria o controle positivo do próprio produto no tema claro.
-    expect(separacaoDoNeutro(REGUA.claro, marca.claro.grauDoAccent, marca.claro.accent)).toBeCloseTo(0.0681, 4);
-    expect(separacaoDoNeutro(REGUA.escuro, marca.escuro.grauDoAccent, marca.escuro.accent)).toBeCloseTo(0.1994, 4);
-    expect(separacaoDoNeutro(REGUA.claro, marca.claro.grauDoAccent, marca.claro.accent)).toBeLessThan(0.08);
+    // Os números exatos, fixados: 0,2681 no claro (accent-600 × neutral-600) e 0,2131 no
+    // escuro (accent-400 × neutral-400). Recalibrados em 2026-09-04 (migração Sage ->
+    // MyTek blue) — a Sage folgava por pouco do piso do briefing (8, convenção ×100,
+    // 0,08 aqui: 0,0681 < 0,08); o azul MyTek folga por bastante mais nos dois temas,
+    // então a asserção "abaixo de 0,08" que provava aquele caso-limite não se aplica
+    // mais e foi removida — o que os dois números acima continuam garantindo é que a
+    // régua não mede zero por acidente (guarda de vacuidade do próprio piso).
+    expect(separacaoDoNeutro(REGUA.claro, marca.claro.grauDoAccent, marca.claro.accent)).toBeCloseTo(0.2681, 4);
+    expect(separacaoDoNeutro(REGUA.escuro, marca.escuro.grauDoAccent, marca.escuro.accent)).toBeCloseTo(0.2131, 4);
 
     // Controle negativo: um accent cinza reprovaria as duas guardas. Sem esta linha, os
     // pisos acima poderiam ser satisfeitos por qualquer coisa.

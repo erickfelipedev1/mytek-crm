@@ -59,7 +59,7 @@ export const DICIONARIO: Traducoes = {
   "Ver tudo em IA": { es: "Ver todo en IA" },
   Conexões: { es: "Conexiones" },
   Webhooks: { es: "Webhooks" },
-  Desempenho: { es: "Rendimiento" },
+  Dashboard: { es: "Rendimiento" },
   "Evolução da IA": { es: "Evolución de la IA" },
   "Audit Log": { es: "Registro de auditoría" },
   Configurações: { es: "Configuración" },

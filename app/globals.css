@@ -24,18 +24,21 @@
   --color-border: #e5e5e5;
   --color-border-strong: #d4d4d4;
 
-  /* Accent — MyTek blue (11 stops; 600 = #175dfc, a cor da marca) */
-  --color-accent-50:  #eff5ff;
-  --color-accent-100: #dbe9ff;
-  --color-accent-200: #bdd9ff;
-  --color-accent-300: #8ec0ff;
-  --color-accent-400: #599eff;
-  --color-accent-500: #2f7cff;
+  /* Accent — MyTek blue (11 stops; 600 = #175dfc, a cor da marca).
+     Os outros 10 stops são gerados por `rampaDeSemente("#175dfc")`
+     (lib/branding/rampa.ts) — não escolhidos à mão. É o que
+     tests/unit/branding-rampa.test.ts calibra contra este arquivo. */
+  --color-accent-50:  #f0f5ff;
+  --color-accent-100: #dfeaff;
+  --color-accent-200: #bfd5ff;
+  --color-accent-300: #93b8ff;
+  --color-accent-400: #6a9bff;
+  --color-accent-500: #437fff;
   --color-accent-600: #175dfc;
-  --color-accent-700: #1149d1;
-  --color-accent-800: #133ea6;
-  --color-accent-900: #143784;
-  --color-accent-950: #0d2151;
+  --color-accent-700: #174cc3;
+  --color-accent-800: #17409a;
+  --color-accent-900: #17377c;
+  --color-accent-950: #071942;
   --color-accent: var(--color-accent-600);
   --color-accent-fg: #fafafa;
   --color-accent-soft: var(--color-accent-100);
@@ -185,42 +188,45 @@
    (lib/branding/css.ts), que só ganha consumidor com a tela de marca.
    ───────────────────────────────────────────────────────────────────────── */
 [data-theme="light"] {
-  --color-bg: #faf9f6;
+  --color-bg: #ffffff;
   --color-surface: #ffffff;
-  --color-surface-elevated: #f5f3ee;
-  --color-overlay: rgba(28, 26, 22, 0.42);
-  --color-text: #1c1a16;
-  --color-text-muted: #5d594f;
-  --color-text-subtle: #7d786c;
-  --color-border: #e7e3da;
-  --color-border-strong: #d2cdbf;
+  --color-surface-elevated: #f5f5f5;
+  --color-overlay: rgba(10, 10, 10, 0.42);
+  --color-text: #0a0a0a;
+  --color-text-muted: #737373;
+  --color-text-subtle: #a3a3a3;
+  --color-border: #e5e5e5;
+  --color-border-strong: #d4d4d4;
   --color-accent: var(--color-accent-600);
-  --color-accent-fg: #ffffff;
+  --color-accent-fg: #fafafa;
   --color-accent-soft: var(--color-accent-100);
   --color-accent-hover: var(--color-accent-700);
-  --color-neutral-50: #faf9f6;
-  --color-neutral-100: #f3f1ec;
-  --color-neutral-200: #e7e3da;
-  --color-neutral-300: #d2cdbf;
-  --color-neutral-400: #a9a395;
-  --color-neutral-500: #7d786c;
-  --color-neutral-600: #5d594f;
-  --color-neutral-700: #46433b;
-  --color-neutral-800: #2e2c26;
-  --color-neutral-900: #1c1a16;
-  --color-neutral-950: #0e0d0a;
-  --color-success: #5a8a5f;
-  --color-success-bg: rgba(90, 138, 95, 0.12);
-  --color-success-fg: #41673f;
-  --color-warning: #b07a2b;
-  --color-warning-bg: rgba(176, 122, 43, 0.12);
-  --color-warning-fg: #875a1a;
-  --color-error: #a94a3c;
-  --color-error-bg: rgba(169, 74, 60, 0.12);
-  --color-error-fg: #8a3a2e;
-  --color-info: #4a7a93;
-  --color-info-bg: rgba(74, 122, 147, 0.12);
-  --color-info-fg: #355d72;
+  --brand-from: #175dfc;
+  --brand-via: #3180ff;
+  --brand-to: #00a6ee;
+  --color-neutral-50: #fafafa;
+  --color-neutral-100: #f5f5f5;
+  --color-neutral-200: #e5e5e5;
+  --color-neutral-300: #d4d4d4;
+  --color-neutral-400: #a3a3a3;
+  --color-neutral-500: #737373;
+  --color-neutral-600: #525252;
+  --color-neutral-700: #404040;
+  --color-neutral-800: #262626;
+  --color-neutral-900: #171717;
+  --color-neutral-950: #0a0a0a;
+  --color-success: #16a34a;
+  --color-success-bg: rgba(22, 163, 74, 0.12);
+  --color-success-fg: #15803d;
+  --color-warning: #d97706;
+  --color-warning-bg: rgba(217, 119, 6, 0.12);
+  --color-warning-fg: #b45309;
+  --color-error: #e40014;
+  --color-error-bg: rgba(228, 0, 20, 0.10);
+  --color-error-fg: #b7000f;
+  --color-info: #2f7cff;
+  --color-info-bg: rgba(47, 124, 255, 0.12);
+  --color-info-fg: #1149d1;
   --shadow-xs: 0 1px 2px 0 rgba(20, 18, 14, 0.04);
   --shadow-sm: 0 1px 2px 0 rgba(20, 18, 14, 0.05), 0 1px 1px 0 rgba(20, 18, 14, 0.03);
   --shadow-md: 0 4px 12px -2px rgba(20, 18, 14, 0.06), 0 2px 4px -1px rgba(20, 18, 14, 0.04);
@@ -262,21 +268,22 @@
   --color-border: #262626;
   --color-border-strong: #404040;
 
-  /* Accent stays same hex stops; default shifts up for dark contrast */
-  --color-accent-50:  #eff5ff;
-  --color-accent-100: #dbe9ff;
-  --color-accent-200: #bdd9ff;
-  --color-accent-300: #8ec0ff;
-  --color-accent-400: #599eff;
-  --color-accent-500: #2f7cff;
+  /* Accent stays same hex stops (mesma rampa gerada, ver comentário no :root
+     light); default shifts up for dark contrast */
+  --color-accent-50:  #f0f5ff;
+  --color-accent-100: #dfeaff;
+  --color-accent-200: #bfd5ff;
+  --color-accent-300: #93b8ff;
+  --color-accent-400: #6a9bff;
+  --color-accent-500: #437fff;
   --color-accent-600: #175dfc;
-  --color-accent-700: #1149d1;
-  --color-accent-800: #133ea6;
-  --color-accent-900: #143784;
-  --color-accent-950: #0d2151;
+  --color-accent-700: #174cc3;
+  --color-accent-800: #17409a;
+  --color-accent-900: #17377c;
+  --color-accent-950: #071942;
   --color-accent: var(--color-accent-400);
   --color-accent-fg: #0a0a0a;
-  --color-accent-soft: rgba(89, 158, 255, 0.16);
+  --color-accent-soft: rgba(106, 155, 255, 0.16);
   --color-accent-hover: var(--color-accent-300);
 
   /* Gradiente da marca, um passo mais claro no escuro (mesma regra do site). */
