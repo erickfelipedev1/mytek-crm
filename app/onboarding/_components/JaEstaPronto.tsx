@@ -45,6 +45,18 @@ export function JaEstaPronto({ retrato }: { retrato: RetratoDaInstalacao }) {
         ? `Funil de vendas criado: ${retrato.funil.nome}`
         : "Nenhum funil de vendas ainda",
     },
+    // Estas duas, diferente das de cima, não são passo de instalação — são
+    // CAPACIDADE do software, que todo build a partir da v1.6.2 já traz.
+    // `pronto` é sempre `true` de propósito: não há "instalação sem elas", só
+    // "ainda não configurada" — e configurar é opcional, não bloqueia nada.
+    {
+      pronto: true,
+      texto: "Automações prontas para avisar n8n/Make quando algo mudar no funil",
+    },
+    {
+      pronto: true,
+      texto: "Meta Ads (Lead Ads + Conversions API) disponível para conectar",
+    },
   ];
 
   const faltando = itens.filter((i) => !i.pronto).length;
