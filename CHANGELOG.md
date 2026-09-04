@@ -8,6 +8,25 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [1.6.2] — 2026-09-04
+
+**Meta Ads: formulário nativo do Facebook/Instagram vira lead sozinho, e lead qualificado avisa a Meta.**
+Duas integrações novas, uma credencial só: quando alguém preenche o formulário nativo (Lead Ads) de um
+anúncio, o CRM agora recebe isso pelo webhook da Meta e cria o lead direto no funil/etapa que você
+escolher — sem precisar exportar planilha nem copiar contato à mão. E quando um lead chega numa etapa
+que você marcar como "qualificado", o CRM avisa o Conversions API da Meta (e-mail/telefone sempre
+hasheados, nunca em claro), pra o algoritmo de anúncios aprender a buscar gente parecida com quem
+qualificou de verdade.
+
+**Não liga sozinho.** Você precisa criar um App no Meta for Developers e conectar suas credenciais —
+passo a passo em `docs/integrations/meta-ads.md`. Sem isso, nada muda no seu dia a dia.
+
+**Inbox ganhou um botão "Excluir" na conversa.** Não existia nenhum jeito de tirar uma conversa de
+teste (ou lixo) da fila — só "Fechar", que continua contando pro atendente e não some da tela. O botão
+novo, ao lado de "Fechar", arquiva a conversa: ela some da Fila, de Minhas e da aba IA, mas o histórico
+continua guardado (nada é apagado de verdade — LGPD e auditoria exigem esse rastro). Funciona também em
+conversa já fechada, que é onde costuma sobrar a maior parte do lixo de teste.
+
 ## [1.5.0] — 2026-08-25
 
 O histórico de quem chega pelos seus formulários agora existe — inclusive de quem **não**
