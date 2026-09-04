@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/auth/AuthProvider";
 import { useClaimConversation } from "@/hooks/inbox/useClaimConversation";
 import { useReleaseConversation } from "@/hooks/inbox/useReleaseConversation";
 import { useCloseConversation } from "@/hooks/inbox/useCloseConversation";
+import { useArchiveConversation } from "@/hooks/inbox/useArchiveConversation";
 import { useResumeAiAttendance } from "@/hooks/inbox/useResumeAiAttendance";
 import { usePauseAiAttendance } from "@/hooks/inbox/usePauseAiAttendance";
 import { useAutomaticoAtivo } from "@/hooks/ai/useAutomaticoAtivo";
@@ -48,6 +49,7 @@ export function ConversationHeader({ conversation }: Props) {
   const claim = useClaimConversation();
   const release = useReleaseConversation();
   const close = useCloseConversation();
+  const archive = useArchiveConversation();
   const retomar = useResumeAiAttendance();
   const pausar = usePauseAiAttendance();
   // "Existe automático nesta org?" — sem isto o selo afirmava que o robô estava
@@ -288,6 +290,26 @@ export function ConversationHeader({ conversation }: Props) {
             }}
           >
             {t("Fechar")}
+          </Button>
+        )}
+        {/* "Excluir" na tela = arquivar por baixo (sem hard-delete — LGPD/
+            auditoria exigem rastro). O efeito que a pessoa pede ("some da
+            fila") já acontece: as três abas ativas (Fila, Minhas, IA)
+            excluem `archived` do filtro. Disponível também em conversa
+            fechada — é aí que mora a maioria do lixo de teste que se quer
+            limpar. */}
+        {status !== "archived" && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={archive.isPending}
+            onClick={() => {
+              if (confirm("Excluir esta conversa? Ela some da sua Inbox — o histórico continua guardado.")) {
+                archive.mutate({ conversation_id: conversation.id });
+              }
+            }}
+          >
+            {t("Excluir")}
           </Button>
         )}
         {/* `xl:hidden` porque a partir de 1280px o painel lateral de CRM entra

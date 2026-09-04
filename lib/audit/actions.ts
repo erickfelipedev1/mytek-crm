@@ -48,6 +48,7 @@ export const AUDIT_ACTIONS = [
   "meta_ads.leadgen_received",
   "meta_ads.leadgen_invalid_signature",
   "meta_ads.leadgen_org_unresolved",
+  "conversation.archived",
   "lead.created",
   "lead.updated",
   "lead.deleted",
