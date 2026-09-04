@@ -8,6 +8,16 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [1.6.4] — 2026-09-04
+
+Correção de CI, sem mudança de comportamento visível. Três pendências antigas na esteira
+(nenhuma causada por release recente) saíram do ar: a suíte de invariantes do webchat
+falhava sempre num `ON CONFLICT` que colidia com uma constraint deferrable; o dicionário
+de espanhol tinha uma chave órfã (`Desempenho`, renomeada pra `Dashboard` na navegação sem
+atualizar a tradução); e a régua de contraste do design system ainda estava calibrada para
+a paleta antiga ("Sage"), enquanto o `globals.css` já rodava a paleta atual (MyTek blue,
+seed `#175dfc`) — os testes de branding comparavam contra o valor errado.
+
 ## [1.6.3] — 2026-09-04
 
 A tela de boas-vindas do onboarding ("isto aqui já está de pé") passa a citar as duas
