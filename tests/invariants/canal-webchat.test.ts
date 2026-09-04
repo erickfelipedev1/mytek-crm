@@ -102,7 +102,7 @@ describe("canal webchat — schema (migration 0176)", () => {
       insert into public.messages
         (id, organization_id, conversation_id, contact_id, channel_session_id, type, direction, status, body)
         values ('${WC_MSG}', '${GOV_ORG}', '${WC_CONV}', '${WC_CONTACT}', null, 'text', 'inbound', 'received', 'oi')
-        on conflict do nothing;
+        on conflict (id) do nothing;
     `);
     expect(
       sql(`select count(*) from public.messages where id = '${WC_MSG}' and channel_session_id is null;`),
