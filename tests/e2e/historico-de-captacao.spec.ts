@@ -80,10 +80,15 @@ test.describe("histórico de leads captados", () => {
       await expect(page.getByRole("dialog")).toBeVisible();
       await page.locator("#src-name").fill(SOURCE_NAME);
       const dialog = page.getByRole("dialog");
-      for (const i of [0, 1]) {
-        await dialog.getByRole("combobox").nth(i).click();
-        await page.getByRole("option").first().click();
-      }
+      // Tipo (nth 0) fica no default; Funil (nth 1) e Estágio (nth 2) são
+      // obrigatórios — `CreateSourceDialog.onSubmit` barra com toast e NÃO faz o
+      // POST sem os dois. O select de estágio só habilita depois que as etapas
+      // do funil carregam.
+      await dialog.getByRole("combobox").nth(1).click();
+      await page.getByRole("option").first().click();
+      await expect(dialog.getByRole("combobox").nth(2)).toBeEnabled({ timeout: 15_000 });
+      await dialog.getByRole("combobox").nth(2).click();
+      await page.getByRole("option").first().click();
       const [criacao] = await Promise.all([
         page.waitForResponse(
           (r) => r.url().includes("/api/v1/webhook-sources") && r.request().method() === "POST",

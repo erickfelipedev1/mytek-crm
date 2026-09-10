@@ -126,8 +126,13 @@ test.describe("webhooks & automações — fluxo completo", () => {
       await page.locator("#src-name").fill(SOURCE_NAME);
 
       const dialog = page.getByRole("dialog");
-      await selectFirstOption(page, dialog.getByRole("combobox").nth(0));
+      // Tipo (nth 0) fica no default; Funil (nth 1) e Estágio (nth 2) são
+      // obrigatórios — `CreateSourceDialog.onSubmit` barra com toast e NÃO faz o
+      // POST sem os dois. O select de estágio só habilita depois que as etapas
+      // do funil carregam.
       await selectFirstOption(page, dialog.getByRole("combobox").nth(1));
+      await expect(dialog.getByRole("combobox").nth(2)).toBeEnabled({ timeout: 15_000 });
+      await selectFirstOption(page, dialog.getByRole("combobox").nth(2));
 
       const [createRes] = await Promise.all([
         page.waitForResponse(
