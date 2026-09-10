@@ -108,8 +108,14 @@ test.describe("J6.8 — anti-SSRF do outbound call_webhook (real, ponta a ponta)
       await page.getByRole("button", { name: /Nova fonte|Criar primeira fonte/ }).click();
       await page.locator("#src-name").fill(SOURCE_NAME);
       const dialog = page.getByRole("dialog");
-      await selectFirstOption(page, dialog.getByRole("combobox").nth(0));
+      // O diálogo tem TRÊS selects: Tipo (nth 0, default "Formulário" já serve),
+      // Funil (nth 1) e Estágio (nth 2). `CreateSourceDialog.onSubmit` barra com
+      // toast e NÃO faz o POST enquanto `pipelineId` ou `stageId` estiver vazio —
+      // era isto que estourava o `waitForResponse` em 180s. O select de estágio
+      // só habilita depois que as etapas do funil escolhido carregam.
       await selectFirstOption(page, dialog.getByRole("combobox").nth(1));
+      await expect(dialog.getByRole("combobox").nth(2)).toBeEnabled({ timeout: 15_000 });
+      await selectFirstOption(page, dialog.getByRole("combobox").nth(2));
       const [createRes] = await Promise.all([
         page.waitForResponse(
           (r) => r.url().includes("/api/v1/webhook-sources") && r.request().method() === "POST",
