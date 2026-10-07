@@ -1,9 +1,6 @@
 "use client";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { CredentialsList } from "@/app/app/ai/credentials/_components/CredentialsList";
-import type { CredentialRow } from "@/hooks/ai/useCredentials";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { CanalOficialClient } from "./CanalOficialClient";
@@ -11,12 +8,6 @@ import { CanalParceiroClient } from "./CanalParceiroClient";
 import { ConnectionsClient } from "./ConnectionsClient";
 import { TemplatesClient } from "./TemplatesClient";
 import { TemplatesParceiroClient } from "./TemplatesParceiroClient";
-
-export interface ConexaoIaProps {
-  credentials: CredentialRow[];
-  usageMap: Record<string, number>;
-  canWrite: boolean;
-}
 
 /**
  * Conexões — TODOS os canais em um lugar só.
@@ -41,24 +32,11 @@ export interface ConexaoIaProps {
  * apontando a aba certa, e um link colado no chat abre onde deveria. Aba que só
  * existe em `useState` transforma todo link salvo em "abre e procura de novo".
  */
-export function ConexoesShell({
-  wahaConfigured,
-  ia,
-}: {
-  wahaConfigured: boolean;
-  ia: ConexaoIaProps;
-}) {
+export function ConexoesShell({ wahaConfigured }: { wahaConfigured: boolean }) {
   const router = useRouter();
   const params = useSearchParams();
   const abaParam = params.get("aba");
-  const aba =
-    abaParam === "oficial"
-      ? "oficial"
-      : abaParam === "parceiro"
-        ? "parceiro"
-        : abaParam === "ia"
-          ? "ia"
-          : "numeros";
+  const aba = abaParam === "oficial" ? "oficial" : abaParam === "parceiro" ? "parceiro" : "numeros";
   const sub = params.get("sub") === "templates" ? "templates" : "conexao";
 
   const irPara = (proximaAba: string, proximaSub?: string): void => {
@@ -91,32 +69,10 @@ export function ConexoesShell({
             porque no dia em que houver um segundo parceiro esta aba não muda.
             Aqui fica o CONCEITO; lá dentro o cartão diz de quem se trata. */}
         <TabsTrigger value="parceiro">Provedor parceiro</TabsTrigger>
-        {/* Não é um canal de mensagens, mas é uma CONEXÃO: sem ela o atendente
-            de IA não responde nada. Antes vivia só em `/app/ai/credentials`,
-            fora do caminho de quem está "conectando as coisas" — quem instala
-            conecta o WhatsApp aqui e fica sem saber que falta a chave da IA. */}
-        <TabsTrigger value="ia">Inteligência artificial</TabsTrigger>
       </TabsList>
 
       <TabsContent value="numeros" className="mt-0">
         <ConnectionsClient wahaConfigured={wahaConfigured} />
-      </TabsContent>
-
-      <TabsContent value="ia" className="mt-0">
-        <div className="flex flex-col gap-4">
-          <p className="text-sm text-muted-foreground">
-            A conta de IA é sua: você contrata direto no provedor e cola a chave aqui. Ela fica
-            guardada criptografada e não aparece mais na tela depois de salva.{" "}
-            <Link href="/app/ai/providers" className="underline underline-offset-2">
-              Ver qual IA atende cada parte do sistema
-            </Link>
-          </p>
-          <CredentialsList
-            initialData={ia.credentials}
-            canWrite={ia.canWrite}
-            usageMap={ia.usageMap}
-          />
-        </div>
       </TabsContent>
 
       <TabsContent value="parceiro" className="mt-0">
