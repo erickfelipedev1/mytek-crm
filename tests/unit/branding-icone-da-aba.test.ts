@@ -86,6 +86,8 @@ describe("o ícone carrega para quem NÃO entrou", () => {
     // O 404 de /favicon.ico não é barato: em produção ele devolve a
     // `app/not-found.tsx` inteira (19.435 bytes) para um pedido de ícone.
     const layout = fs.readFileSync(path.join(RAIZ, "app/layout.tsx"), "utf8");
-    expect(layout).toMatch(/icons:\s*\{\s*icon:\s*"\/icon"\s*\}/);
+    // `icon: "/icon"` é o que importa; `apple` (ícone da tela inicial do iPhone,
+    // app instalável) pode vir junto — por isso a regex não fecha a chave.
+    expect(layout).toMatch(/icons:\s*\{\s*icon:\s*"\/icon"/);
   });
 });

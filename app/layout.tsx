@@ -22,6 +22,7 @@ import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { ThemeProvider } from "@/lib/theme";
 import { Providers } from "./providers";
+import { PwaSetup } from "@/components/pwa/PwaSetup";
 import { PublicEnvScript } from "./public-env-script";
 import "./globals.css";
 
@@ -109,7 +110,9 @@ export async function generateMetadata(): Promise<Metadata> {
     // `/icon` faz o pedido ir para `app/icon.tsx`, que desenha a marca da
     // instalação em runtime — ver o cabeçalho daquele arquivo para por que ele
     // não pode ser um arquivo estático em `public/`.
-    icons: { icon: "/icon" },
+    icons: { icon: "/icon", apple: "/pwa-icon?s=180" },
+    // iPhone: abre em tela cheia quando instalado pela tela de início.
+    appleWebApp: { capable: true, title: name, statusBarStyle: "default" },
   };
 }
 
@@ -298,6 +301,7 @@ export default function RootLayout({
           <MarcaDosClientComponents>
             <ThemeProvider>{children}</ThemeProvider>
           </MarcaDosClientComponents>
+          <PwaSetup />
           <Toaster
             position="top-right"
             richColors

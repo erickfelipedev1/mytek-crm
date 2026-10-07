@@ -41,6 +41,14 @@ export const PUBLIC_PATHS: RegExp[] = [
   // antes desta linha: `GET /icon` → 307 para `/login?next=%2Ficon`, enquanto
   // `/icon.png` (inexistente) devolvia 404 — a diferença é só a extensão.
   /^\/icon$/,
+  // App instalável (PWA). O navegador busca o manifesto, os ícones e a tela de
+  // "sem conexão" SEM sessão: ao instalar, e quando o service worker guarda a
+  // tela offline. Sem estas linhas o proxy responde 307 para `/login` — e o
+  // service worker guardaria a página de login como se fosse a tela offline.
+  // Âncoradas, uma a uma: `/^\/pwa/` abriria qualquer rota futura que comece assim.
+  /^\/manifest\.webmanifest$/,
+  /^\/pwa-icon$/,
+  /^\/offline\.html$/,
   /^\/team\/accept-invite\/.+$/,
   /^\/account-suspended$/,
   // Documentos legais. O checkbox obrigatório de `/onboarding/welcome` linka os

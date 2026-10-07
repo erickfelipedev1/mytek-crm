@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CanalOficialClient } from "./CanalOficialClient";
 import { CanalParceiroClient } from "./CanalParceiroClient";
 import { ConnectionsClient } from "./ConnectionsClient";
+import { IntegracaoIaClient } from "./IntegracaoIaClient";
 import { TemplatesClient } from "./TemplatesClient";
 import { TemplatesParceiroClient } from "./TemplatesParceiroClient";
 
@@ -36,7 +37,14 @@ export function ConexoesShell({ wahaConfigured }: { wahaConfigured: boolean }) {
   const router = useRouter();
   const params = useSearchParams();
   const abaParam = params.get("aba");
-  const aba = abaParam === "oficial" ? "oficial" : abaParam === "parceiro" ? "parceiro" : "numeros";
+  const aba =
+    abaParam === "oficial"
+      ? "oficial"
+      : abaParam === "parceiro"
+        ? "parceiro"
+        : abaParam === "ia"
+          ? "ia"
+          : "numeros";
   const sub = params.get("sub") === "templates" ? "templates" : "conexao";
 
   const irPara = (proximaAba: string, proximaSub?: string): void => {
@@ -69,10 +77,18 @@ export function ConexoesShell({ wahaConfigured }: { wahaConfigured: boolean }) {
             porque no dia em que houver um segundo parceiro esta aba não muda.
             Aqui fica o CONCEITO; lá dentro o cartão diz de quem se trata. */}
         <TabsTrigger value="parceiro">Provedor parceiro</TabsTrigger>
+        {/* Não é canal de mensagens, mas é uma CONEXÃO: é por aqui que a pessoa liga
+            a própria IA ao CRM (MCP). Antes só existia em Configurações › Tokens
+            de API, fora do caminho de quem está "conectando as coisas". */}
+        <TabsTrigger value="ia">Integração com IA</TabsTrigger>
       </TabsList>
 
       <TabsContent value="numeros" className="mt-0">
         <ConnectionsClient wahaConfigured={wahaConfigured} />
+      </TabsContent>
+
+      <TabsContent value="ia" className="mt-0">
+        <IntegracaoIaClient />
       </TabsContent>
 
       <TabsContent value="parceiro" className="mt-0">

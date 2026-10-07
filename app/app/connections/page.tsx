@@ -24,8 +24,9 @@ export default async function ConnectionsPage() {
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Conexões</h1>
         <p className="text-sm text-muted-foreground">
-          Por onde seu negócio fala com o cliente. Conecte números por QR ou o número oficial
-          da Meta, e acompanhe a saúde de cada um.
+          Por onde seu negócio fala com o cliente — e por onde a sua IA fala com o CRM. Conecte
+          números por QR ou o número oficial da Meta, ligue a sua IA e acompanhe a saúde de cada
+          conexão.
         </p>
       </header>
       <ConexoesShell wahaConfigured={wahaConfigured} />
